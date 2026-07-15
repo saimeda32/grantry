@@ -1,4 +1,4 @@
-# keygate (working name) — design
+# grantry — design
 
 Date: 2026-07-15. Status: draft pending aws-sso-util audit findings (section 8).
 
@@ -30,7 +30,7 @@ only place cloud-specific code lives, so Azure (Entra device code) and GCP
 
 ### Core: session daemon
 
-A single binary (`keygate serve`, auto-started on first use) that owns
+A single binary (`grantry serve`, auto-started on first use) that owns
 provider sessions: runs the Identity Center device flow, caches and refreshes
 tokens before expiry, and mints role credentials on demand. All secrets live
 in the OS keychain (aws-vault/Granted precedent), never plaintext on disk.
@@ -56,7 +56,7 @@ caller (MCP client name/session), identity, TTL, policy rule that allowed it.
 
 ### Face 2: policy
 
-`~/.keygate/policy.yaml`, written by the human once:
+`~/.grantry/policy.yaml`, written by the human once:
 
 ```yaml
 agents:
@@ -78,19 +78,19 @@ broker enforces policy; the agent never sees credentials policy forbids.
 
 The aws-sso-util lineage, rebuilt on the daemon:
 
-- `keygate login` — log in to Identity Center, no profile required
-- `keygate ls` — accounts and roles you can use (live)
-- `keygate switch <identity>` — subshell or env exports for an identity
-- `keygate run <identity> -- cmd` — one-off command as an identity
-- `keygate populate` — generate AWS config profiles from live access,
+- `grantry login` — log in to Identity Center, no profile required
+- `grantry ls` — accounts and roles you can use (live)
+- `grantry switch <identity>` — subshell or env exports for an identity
+- `grantry run <identity> -- cmd` — one-off command as an identity
+- `grantry populate` — generate AWS config profiles from live access,
   reconciled (adds, updates, prunes stale entries it owns)
-- `keygate check` — diagnose configuration and access with distinct exit codes
-- `keygate audit` — read the grant log
-- `keygate serve --container-endpoint` — expose the ECS-style container
+- `grantry check` — diagnose configuration and access with distinct exit codes
+- `grantry audit` — read the grant log
+- `grantry serve --container-endpoint` — expose the ECS-style container
   credentials endpoint on localhost so every AWS SDK picks up credentials
   with one env var, no config files at all
 
-A Claude Code skill ships in-repo (`skills/keygate/`) teaching agents the MCP
+A Claude Code skill ships in-repo (`skills/grantry/`) teaching agents the MCP
 verbs and the request_login etiquette.
 
 ## Provider boundary
@@ -117,7 +117,7 @@ official MCP Python SDK is first-party, and `keyring` gives OS-keychain
 access on macOS/Windows/Linux. The daemon is asyncio; HTTP against AWS via
 botocore's low-level client only (no reaching into botocore internals, per
 the audit). Packaging: uv-managed project, ruff + mypy strict, pipx/uvx
-install (`uvx keygate`), which is how agents and CI consume Python tools
+install (`uvx grantry`), which is how agents and CI consume Python tools
 today. A single-binary build (PyInstaller or shiv) is a roadmap item, not a
 v1 requirement.
 
@@ -126,7 +126,7 @@ v1 requirement.
 - Tokens and client registrations: OS keychain only. No plaintext cache
   (differs from aws-sso-util, which caches tokens world-readable-ish in
   ~/.aws/sso/cache).
-- Minted credentials: returned to the caller, never persisted by keygate.
+- Minted credentials: returned to the caller, never persisted by grantry.
 - Debug logging never prints secrets (aws-sso-util's credential-process debug
   log famously contains credentials; explicit non-goal here).
 - The MCP server binds to stdio (per-client) or localhost with a per-session
@@ -153,7 +153,7 @@ v1 requirement.
 1. Azure provider (Entra device code), GCP provider (ADC + workforce
    identity).
 2. Team mode: shared policy distribution (signed policy bundles).
-3. runclave integration: keygate as runclave's credential injector.
+3. runclave integration: grantry as runclave's credential injector.
 4. Session recording hooks for compliance environments.
 
 ## Non-goals
@@ -166,7 +166,7 @@ v1 requirement.
 ## 8. Lessons from aws-sso-util (audit, 2026-07-15)
 
 Full audit of the 8,069-LOC codebase (zero tests, no CI, 26 tool-specific env
-vars, vendored botocore internals). What keygate adopts and what it rejects:
+vars, vendored botocore internals). What grantry adopts and what it rejects:
 
 ### Adopt
 
@@ -180,7 +180,7 @@ vars, vendored botocore internals). What keygate adopts and what it rejects:
 - Injectable everything in the auth core: cache, clock, sleep, browser
   handler. The vendored SSOTokenFetcher was the only genuinely testable class
   in the codebase precisely because botocore built it that way.
-- A doctor command (`keygate check`) with a stable, documented exit-code
+- A doctor command (`grantry check`) with a stable, documented exit-code
   taxonomy (aws-sso-util's 101/102/103, 20x pattern) and cache-permission
   forensics.
 - populate with --dry-run, an ownership marker, and reconciliation. Config
@@ -191,26 +191,26 @@ vars, vendored botocore internals). What keygate adopts and what it rejects:
 - Retry hardening by default (standard mode, 10 attempts) respecting
   AWS_RETRY_MODE/AWS_MAX_ATTEMPTS; receivedAt metadata on tokens; run-as
   style scrubbing of ambient AWS_* env before injecting.
-- Native-cache interop as a tested contract: keygate reads/refreshes the
+- Native-cache interop as a tested contract: grantry reads/refreshes the
   AWS CLI's ~/.aws/sso/cache format so `aws` CLI keeps working, but its own
   secrets live in the keychain.
 
 ### Reject
 
 - Vendoring SDK internals. The OIDC device flow is <500 LOC of protocol;
-  keygate implements it natively against the public API.
+  grantry implements it natively against the public API.
 - Plaintext token caches and credential-bearing debug logs (aws-sso-util
   writes credentials into a default-umask log file and tokens to -vv
-  output). keygate: secret redaction is a logging-layer invariant, and the
+  output). grantry: secret redaction is a logging-layer invariant, and the
   debug log never contains secrets by construction.
-- The env-var jungle (26 vars, three names for one setting). keygate: one
-  KEYGATE_ prefix, one documented precedence rule.
+- The env-var jungle (26 vars, three names for one setting). grantry: one
+  GRANTRY_ prefix, one documented precedence rule.
 - Flag-meaning drift across subcommands (--region meaning two different
   things). One glossary, enforced in review.
 - The profile-name mini-DSL (7 naming knobs). One template string plus an
   optional external formatter.
 - Shipping a second product inside the first (the CloudFormation macro was
-  ~25% of the codebase, its deploy command disabled). keygate stays one
+  ~25% of the codebase, its deploy command disabled). grantry stays one
   product; admin tooling is a different repo if it ever exists.
 - APIs that return exceptions instead of raising, silent except-pass,
   device-flow polls with no client-side timeout.
