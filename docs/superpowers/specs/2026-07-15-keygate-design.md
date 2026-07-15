@@ -111,10 +111,15 @@ methods later. Nothing outside the provider package imports an AWS SDK.
 
 ## Language and stack
 
-Go. Reasons: single static binary (agents and CI install it with one
-download), first-class keychain libraries (99designs/keyring, the same one
-aws-vault and Granted use), goroutine-friendly daemon, and the MCP Go SDK is
-mature. Distribution: goreleaser binaries + Homebrew tap + `go install`.
+Python (>=3.10). Reasons: it is the house strength, the aws-sso-util lessons
+transfer directly (same ecosystem, same device-flow protocol shapes), the
+official MCP Python SDK is first-party, and `keyring` gives OS-keychain
+access on macOS/Windows/Linux. The daemon is asyncio; HTTP against AWS via
+botocore's low-level client only (no reaching into botocore internals, per
+the audit). Packaging: uv-managed project, ruff + mypy strict, pipx/uvx
+install (`uvx keygate`), which is how agents and CI consume Python tools
+today. A single-binary build (PyInstaller or shiv) is a roadmap item, not a
+v1 requirement.
 
 ## Security model
 
