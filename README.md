@@ -31,14 +31,22 @@ pipx install grantry
 
 ## Point it at your Identity Center
 
-Set two values, once:
+Give grantry the instance once, on any command:
 
 ```bash
-export GRANTRY_SSO_START_URL=https://your-org.awsapps.com/start
-export GRANTRY_SSO_REGION=us-east-1
+grantry --start-url https://your-org.awsapps.com/start --region us-east-1 login
 ```
 
-(Or pass `--start-url` and `--region` on any command.)
+grantry remembers it (in `~/.grantry/instance.json`), so every later command
+just works with no flags:
+
+```bash
+grantry ls
+grantry login
+```
+
+You can still override per command with `--start-url`/`--region`, or set
+`GRANTRY_SSO_START_URL` and `GRANTRY_SSO_REGION` if you prefer env vars.
 
 ## Commands
 

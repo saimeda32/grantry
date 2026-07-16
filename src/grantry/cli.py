@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
 from grantry.config import state_path
+from grantry.instance import load_instance, save_instance
 from grantry.logging_setup import configure_logging
 from grantry.mcp_server import build_mcp
 from grantry.policy import Policy
@@ -39,13 +40,23 @@ def build_broker(start_url: str, region: str) -> Broker:
 
 
 def _instance(args: argparse.Namespace) -> tuple[str, str]:
+    # Resolution order: CLI flag, then env var, then the instance saved on a
+    # previous run. You provide it once (flag or env); grantry remembers it.
+    saved = load_instance()
     start = args.start_url or os.environ.get("GRANTRY_SSO_START_URL")
     region = args.region or os.environ.get("GRANTRY_SSO_REGION")
-    if not start or not region:
-        raise SystemExit(
-            "Set --start-url and --region, or GRANTRY_SSO_START_URL and GRANTRY_SSO_REGION."
-        )
-    return start, region
+    if start and region:
+        # An explicit instance was given: remember it for next time.
+        if saved is None or saved.start_url != start or saved.region != region:
+            save_instance(start, region)
+        return start, region
+    if saved is not None:
+        # Fall back to the remembered instance, letting a partial flag override.
+        return start or saved.start_url, region or saved.region
+    raise SystemExit(
+        "No Identity Center instance known yet. Pass --start-url and --region once "
+        "(or set GRANTRY_SSO_START_URL and GRANTRY_SSO_REGION); grantry will remember it."
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
