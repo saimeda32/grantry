@@ -80,9 +80,13 @@ grantry init
 grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls
 ```
 
-After `grantry login`, the native `aws` CLI, boto3, and Terraform work too. Run
-`grantry populate` once to create the matching profiles in `~/.aws/config`, then
-use `aws --profile ...` with no grantry in the loop.
+`grantry login` also writes matching profiles into `~/.aws/config` for every
+account and role you can reach, so the native `aws` CLI, boto3, and Terraform
+work with no grantry in the loop: just `aws --profile <account>.<role> ...`. Use
+either grantry or the plain AWS tooling, whichever you prefer. It reconciles
+safely and never touches profiles you wrote by hand. Pass `--no-populate` (or set
+`GRANTRY_NO_POPULATE=1`) if you would rather manage `~/.aws/config` yourself and
+run `grantry populate` on demand.
 
 ### Route native tools through grantry (audited)
 

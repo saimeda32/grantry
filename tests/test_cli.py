@@ -98,13 +98,14 @@ def _fake_broker(tmp_path, monkeypatch):
     return b
 
 
-def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
+def _login_env(tmp_path, monkeypatch):
     import grantry.cli as climod
-    from grantry.idcache import read_keys
 
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     monkeypatch.setenv("GRANTRY_SSO_START_URL", "https://acme.awsapps.com/start")
     monkeypatch.setenv("GRANTRY_SSO_REGION", "us-east-1")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "config"))
+    monkeypatch.delenv("GRANTRY_NO_POPULATE", raising=False)
     (tmp_path / "policy.yaml").write_text("humans:\n  max_ttl: 12h\n")
 
     def fake_build(start, region):
@@ -117,11 +118,49 @@ def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
         )
 
     monkeypatch.setattr(climod, "build_broker", fake_build)
+
+
+def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
+    from grantry.idcache import read_keys
+
+    _login_env(tmp_path, monkeypatch)
     rc = main(["login"])
     assert rc == 0
     keys = read_keys()
     assert "prod/ReadOnlyAccess" in keys
     assert "dev-pay/AWSPowerUserAccess" in keys
+
+
+def test_login_populates_aws_config(tmp_path, monkeypatch, capsys):
+    _login_env(tmp_path, monkeypatch)
+    rc = main(["login"])
+    assert rc == 0
+    body = (tmp_path / "config").read_text()
+    assert "[profile prod.ReadOnlyAccess]" in body
+    assert "[profile dev-pay.AWSPowerUserAccess]" in body
+
+
+def test_login_no_populate_skips_config_but_warms_cache(tmp_path, monkeypatch, capsys):
+    from grantry.idcache import read_keys
+
+    _login_env(tmp_path, monkeypatch)
+    rc = main(["login", "--no-populate"])
+    assert rc == 0
+    assert not (tmp_path / "config").exists()  # no profiles written
+    assert "prod/ReadOnlyAccess" in read_keys()  # cache still warmed
+
+
+def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
+    import grantry.cli as climod
+
+    def boom(argv):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(climod, "_run", boom)
+    rc = climod.main(["version"])
+    err = capsys.readouterr().err
+    assert rc == 130
+    assert "Cancelled" in err
 
 
 def test_login_handler_auto_opens_browser(monkeypatch):
@@ -130,7 +169,12 @@ def test_login_handler_auto_opens_browser(monkeypatch):
     from grantry.cli import TerminalHandler
 
     opened = []
-    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
+
+    def fake_open(url):
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(webbrowser, "open", fake_open)
     monkeypatch.delenv("GRANTRY_NO_BROWSER", raising=False)
     url = "https://x.awsapps.com/start/#/device?user_code=AB-CD"
     TerminalHandler().on_verification(url, "AB-CD")
@@ -143,7 +187,12 @@ def test_login_handler_respects_no_browser(monkeypatch, capsys):
     from grantry.cli import TerminalHandler
 
     opened = []
-    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
+
+    def fake_open(url):
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr(webbrowser, "open", fake_open)
     monkeypatch.setenv("GRANTRY_NO_BROWSER", "1")
     TerminalHandler().on_verification("https://x/verify?code=AB", "AB")
     out = capsys.readouterr().out

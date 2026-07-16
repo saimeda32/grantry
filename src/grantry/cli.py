@@ -106,6 +106,16 @@ def _instance(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Turn a Ctrl-C into a clean message and the conventional 130 exit code,
+    # instead of dumping a Python traceback the user did not ask to see.
+    try:
+        return _run(argv)
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        return 130
+
+
+def _run(argv: list[str] | None = None) -> int:
     from grantry.appconfig import load_config
 
     app_cfg = load_config()
@@ -125,6 +135,11 @@ def main(argv: list[str] | None = None) -> int:
     p_login = sub.add_parser("login", parents=[inst], help="log in to Identity Center")
     p_login.add_argument(
         "--force-refresh", action="store_true", help="ignore any cached session and log in again"
+    )
+    p_login.add_argument(
+        "--no-populate",
+        action="store_true",
+        help="do not write ~/.aws/config profiles after logging in",
     )
     sub.add_parser("logout", help="clear the saved session for the current instance")
     sub.add_parser("version", help="print the grantry version")
@@ -307,13 +322,22 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         session = broker.login(TerminalHandler())
         print(f"Logged in to {session.start_url}.")
-        # Warm the completion cache so TAB works right after the first login,
-        # not only after the first 'ls'. Best effort: a slow or failed listing
-        # must never turn a successful login into an error.
-        with contextlib.suppress(Exception):
-            broker.identities()
-        print("The native 'aws' CLI and SDKs can now use this session too.")
-        print("Run 'grantry populate' once to create matching ~/.aws/config profiles.")
+        skip_populate = args.no_populate or os.environ.get("GRANTRY_NO_POPULATE") == "1"
+        if skip_populate:
+            # Still warm the completion cache so TAB works right away. Best effort:
+            # a slow or failed listing must never turn a successful login into an error.
+            with contextlib.suppress(Exception):
+                broker.identities()
+        else:
+            # Write ~/.aws/config profiles for every account and role, so the native
+            # aws CLI, boto3, and Terraform work too, whether or not you use grantry.
+            # This reconciles safely (it never touches your hand-written profiles) and
+            # also warms the completion cache. Best effort, so it cannot fail the login.
+            with contextlib.suppress(Exception):
+                _cmd_populate(broker, start, region, None, dry_run=False)
+        print("The native 'aws' CLI, boto3, and Terraform can use this session too.")
+        if skip_populate:
+            print("Run 'grantry populate' to write matching ~/.aws/config profiles.")
         return 0
 
     if args.command == "logout":

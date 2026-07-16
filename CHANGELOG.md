@@ -4,6 +4,26 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.6.0] - 2026-07-16
+
+### Added
+- `grantry login` now writes `~/.aws/config` profiles for every account and role
+  after logging in, so the native `aws` CLI, boto3, and Terraform work right away
+  with `aws --profile <account>.<role>`. It reconciles safely and never touches
+  your hand-written profiles. Pass `--no-populate` (or set `GRANTRY_NO_POPULATE=1`)
+  to skip it.
+
+### Changed
+- `grantry login` now opens your browser to the approval page automatically (the
+  URL already carries the code) and waits for approval by polling, instead of
+  asking you to press Enter. Set `GRANTRY_NO_BROWSER=1` for headless or SSH use.
+- Pressing Ctrl-C prints a clean "Cancelled." and exits 130 instead of dumping a
+  Python traceback.
+
+### Fixed
+- Corrected the install docs to lead with persistent `uv tool install` / `pipx`
+  (not ephemeral `uvx`), and fixed a mypy failure on Python 3.10 in CI.
+
 ## [0.5.0] - 2026-07-16
 
 ### Added
@@ -92,6 +112,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.6.0]: https://github.com/saimeda32/grantry/releases/tag/v0.6.0
 [0.5.0]: https://github.com/saimeda32/grantry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/saimeda32/grantry/releases/tag/v0.4.0
 [0.3.0]: https://github.com/saimeda32/grantry/releases/tag/v0.3.0
