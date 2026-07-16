@@ -86,8 +86,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("--start-url", default=None)
     parser.add_argument("--region", default=None)
+    # A shared parent so the instance flags also work AFTER the subcommand
+    # (grantry login --start-url ...), which is the order people naturally type.
+    # SUPPRESS means "not given here" does not clobber a value given before the
+    # subcommand, so both orders work.
+    inst = argparse.ArgumentParser(add_help=False)
+    inst.add_argument("--start-url", default=argparse.SUPPRESS)
+    inst.add_argument("--region", default=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
-    p_login = sub.add_parser("login", help="log in to Identity Center")
+    p_login = sub.add_parser("login", parents=[inst], help="log in to Identity Center")
     p_login.add_argument(
         "--force-refresh", action="store_true", help="ignore any cached session and log in again"
     )
@@ -96,28 +103,38 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("instances", help="list remembered Identity Center instances")
     p_use = sub.add_parser("use", help="switch the current instance by name or prefix")
     p_use.add_argument("name")
-    sub.add_parser("ls")
+    sub.add_parser("ls", parents=[inst])
     p_audit = sub.add_parser("audit", help="print or visualize the grant history")
     p_audit.add_argument("--visualize", action="store_true", help="write an HTML timeline instead")
     p_audit.add_argument("-o", "--out", default="grantry-audit.html")
-    sub.add_parser("mcp")
-    p_graph = sub.add_parser("graph", help="write an HTML map of what agents can reach")
+    sub.add_parser("mcp", parents=[inst])
+    p_graph = sub.add_parser(
+        "graph", parents=[inst], help="write an HTML map of what agents can reach"
+    )
     p_graph.add_argument("--caller", choices=["agent", "human"], default="agent")
     p_graph.add_argument("-o", "--out", default="grantry-access.html")
-    p_run = sub.add_parser("run", help="run a command as an identity")
+    p_run = sub.add_parser("run", parents=[inst], help="run a command as an identity")
     p_run.add_argument("identity")
     p_run.add_argument("--ttl", default="1h")
     p_run.add_argument("cmd", nargs=argparse.REMAINDER)
-    p_switch = sub.add_parser("switch", help="print shell exports to adopt an identity")
+    p_switch = sub.add_parser(
+        "switch", parents=[inst], help="print shell exports to adopt an identity"
+    )
     p_switch.add_argument("identity")
     p_switch.add_argument("--ttl", default="1h")
-    p_pop = sub.add_parser("populate", help="write ~/.aws/config profiles for your access")
+    p_pop = sub.add_parser(
+        "populate", parents=[inst], help="write ~/.aws/config profiles for your access"
+    )
     p_pop.add_argument("--dry-run", action="store_true")
     p_pop.add_argument("--workload-region", default=None)
-    sub.add_parser("check", help="diagnose configuration and access")
-    p_init = sub.add_parser("init", help="generate a starter policy from your real access")
+    sub.add_parser("check", parents=[inst], help="diagnose configuration and access")
+    p_init = sub.add_parser(
+        "init", parents=[inst], help="generate a starter policy from your real access"
+    )
     p_init.add_argument("--force", action="store_true", help="overwrite an existing policy")
-    p_admin = sub.add_parser("admin", help="administrator commands (need management access)")
+    p_admin = sub.add_parser(
+        "admin", parents=[inst], help="administrator commands (need management access)"
+    )
     admin_sub = p_admin.add_subparsers(dest="admin_command", required=True)
     p_assign = admin_sub.add_parser("assignments", help="crawl who-has-what across the org")
     p_assign.add_argument(

@@ -31,15 +31,13 @@ policy, and one audit trail across every agent on your machine.
 
 ## Install
 
-Once grantry is published to PyPI:
-
 ```bash
 uvx grantry --help        # run without installing
 # or
 pipx install grantry
 ```
 
-Until then, install from source:
+Or from source:
 
 ```bash
 git clone https://github.com/saimeda32/grantry
@@ -54,13 +52,13 @@ Works on macOS, Linux, and Windows. Python 3.10 or newer.
 
 ```bash
 # 1. Point grantry at your Identity Center, just once. It remembers.
-grantry --start-url https://your-org.awsapps.com/start --region us-east-1 login
+grantry login --start-url https://your-org.awsapps.com/start --region us-east-1
 
-# 2. Generate a starter policy from your real access.
-grantry init
-
-# 3. See what you can reach.
+# 2. See what you can reach.
 grantry ls
+
+# 3. Generate a starter policy from your real access, then edit it.
+grantry init
 
 # 4. Run any command as a role.
 grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls
@@ -172,15 +170,20 @@ Everything survives reboots. To remove grantry state: `grantry logout` and
 
 ## Security
 
-- Secrets live only in the OS keychain. Redaction happens in one place, so no
-  log line can leak a token.
+- Secrets (SSO tokens, refresh tokens) live in the OS keychain. Logging redacts
+  tokens in one place, including exception tracebacks.
 - The MCP server is not a network service. It talks to the agent that started
   it over stdio.
-- Credentials are short lived and scoped to what the policy allows.
 - Every grant is recorded in `~/.grantry/audit.jsonl`, and never includes the
   credentials themselves.
 
-See [SECURITY.md](SECURITY.md) to report a vulnerability.
+Read this honestly before relying on grantry as a control: the policy gate only
+covers the MCP door. If an agent also has a shell and you have run
+`grantry populate`, the agent can use `aws --profile ...` directly and bypass
+the gate. For the gate to be a real boundary, run the agent with no ambient AWS
+access. And `get_credentials` returns credentials as text into the agent's
+context. See [SECURITY.md](SECURITY.md) for the full picture and to report a
+vulnerability.
 
 ## Roadmap
 
