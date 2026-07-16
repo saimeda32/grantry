@@ -125,7 +125,7 @@ class VerifyingProvider:
         return Credentials("AKIA", "sec", "sess", time.time() + ttl)
 
 
-def test_request_login_notifies_and_completes(tmp_path, monkeypatch):
+def test_request_login_is_fire_and_forget(tmp_path, monkeypatch):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     (tmp_path / "policy.yaml").write_text(POLICY)
     b = Broker(
@@ -136,11 +136,40 @@ def test_request_login_notifies_and_completes(tmp_path, monkeypatch):
         clock_iso=lambda: "t",
     )
     seen = []
-    out = handle_request_login(b, notify=lambda title, msg: seen.append((title, msg)))
-    assert "complete" in out.lower()
+    state: dict[str, object] = {}
+    # Returns promptly with the URL and code; it must NOT block for the login.
+    out = handle_request_login(b, notify=lambda title, msg: seen.append((title, msg)), state=state)
+    assert "WXYZ-1234" in out  # the code is relayed to the agent
+    assert "get_credentials again" in out
     assert seen and "WXYZ-1234" in seen[0][1]
-    # The session was persisted, so a subsequent request has a session.
+    # The background login thread finishes and persists the session.
+    state["pending"].thread.join(timeout=5)  # type: ignore[attr-defined]
     assert b.cached_session() is not None
+
+
+def test_request_login_rate_limits_concurrent_calls(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    (tmp_path / "policy.yaml").write_text(POLICY)
+
+    import threading as _t
+
+    release = _t.Event()
+
+    class SlowProvider(VerifyingProvider):
+        def start_login(self, handler):
+            handler.on_verification("https://device.example/verify", "WXYZ-1234")
+            release.wait(timeout=5)  # hold the "login" open like a human deciding
+            return Session(self.start_url, self.region, "tok", time.time() + 3600)
+
+    b = Broker(SlowProvider(), Policy.load(tmp_path / "policy.yaml"), AuditLog(),
+               SecretStore(), clock_iso=lambda: "t")
+    state: dict[str, object] = {}
+    first = handle_request_login(b, notify=lambda t, m: None, state=state)
+    second = handle_request_login(b, notify=lambda t, m: None, state=state)
+    assert "WXYZ-1234" in first
+    assert "already waiting" in second.lower()  # no second flow started
+    release.set()
+    state["pending"].thread.join(timeout=5)  # type: ignore[attr-defined]
 
 
 def test_caller_label_recorded_in_audit(tmp_path, monkeypatch):

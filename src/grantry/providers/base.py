@@ -8,6 +8,11 @@ from typing import Protocol
 from grantry.identity import Identity
 
 
+class RefreshExpiredError(Exception):
+    """Raised by a provider when the refresh token is permanently invalid, so a
+    new interactive login is required. Transient failures raise other errors."""
+
+
 @dataclass(frozen=True)
 class Session:
     start_url: str

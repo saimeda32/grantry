@@ -9,7 +9,10 @@ import contextlib
 import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Callable
+from datetime import datetime, timezone
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -25,7 +28,20 @@ def _desktop_notify(title: str, message: str) -> None:
     # though the MCP server has no terminal of its own. Silent if unavailable.
     cmd: list[str] | None = None
     if sys.platform == "darwin" and shutil.which("osascript"):
-        cmd = ["osascript", "-e", f'display notification "{message}" with title "{title}"']
+        # Pass message and title as AppleScript arguments, never interpolated
+        # into the script text, so a quote in either cannot break out and run
+        # arbitrary AppleScript.
+        cmd = [
+            "osascript",
+            "-e",
+            "on run {m, t}",
+            "-e",
+            "display notification m with title t",
+            "-e",
+            "end run",
+            message,
+            title,
+        ]
     elif shutil.which("notify-send"):
         cmd = ["notify-send", title, message]
     if cmd is not None:
@@ -33,40 +49,89 @@ def _desktop_notify(title: str, message: str) -> None:
             subprocess.run(cmd, check=False, timeout=5)
 
 
-class _AgentLoginHandler(InteractionHandler):
-    """Surfaces the device-flow prompt to the human via notification and stderr,
-    then returns immediately; the provider's poll loop waits for browser
-    approval, so nothing blocks on a stdin no agent can reach.
+class _PendingLogin:
+    def __init__(self) -> None:
+        self.thread: threading.Thread | None = None
+        self.uri: str | None = None
+        self.code: str | None = None
+        self.error: str | None = None
+        self.prompted = threading.Event()
+
+
+# Module-level default so a single MCP server tracks one in-flight login.
+_DEFAULT_LOGIN_STATE: dict[str, Any] = {}
+
+
+def handle_request_login(
+    broker: Broker,
+    notify: Notifier = _desktop_notify,
+    state: dict[str, Any] | None = None,
+) -> str:
+    """Start a login WITHOUT blocking the tool call. It kicks off the device
+    flow on a background thread, surfaces the browser prompt to the human, and
+    returns immediately with the URL and code so the agent can relay them. The
+    agent then calls get_credentials again once the human approves. Repeated
+    calls while a login is already waiting return the same prompt rather than
+    starting a second flow.
     """
+    state = state if state is not None else _DEFAULT_LOGIN_STATE
+    existing = state.get("pending")
+    if existing is not None and existing.thread is not None and existing.thread.is_alive():
+        if existing.uri:
+            return (
+                f"A login is already waiting for approval. Ask the human to open "
+                f"{existing.uri} and enter code {existing.code}, then call get_credentials again."
+            )
+        return "A login is already starting. Wait a moment, then call whoami to check."
 
-    def __init__(self, notify: Notifier) -> None:
-        self._notify = notify
+    pending = _PendingLogin()
+    state["pending"] = pending
 
-    def on_verification(self, verification_uri: str, user_code: str) -> None:
-        msg = f"Open {verification_uri} and enter code {user_code}"
-        self._notify("grantry login required", msg)
-        print(f"grantry: {msg}", file=sys.stderr, flush=True)
+    class _Handler(InteractionHandler):
+        def on_verification(self, verification_uri: str, user_code: str) -> None:
+            pending.uri, pending.code = verification_uri, user_code
+            msg = f"Open {verification_uri} and enter code {user_code}"
+            notify("grantry login required", msg)
+            print(f"grantry: {msg}", file=sys.stderr, flush=True)
+            pending.prompted.set()
 
-    def wait(self) -> None:
-        return None
+        def wait(self) -> None:
+            return None
 
+    def _run() -> None:
+        try:
+            broker.login(_Handler())
+        except Exception as e:  # captured for the next status check, never raised here
+            pending.error = str(e)
 
-def handle_request_login(broker: Broker, notify: Notifier = _desktop_notify) -> str:
-    try:
-        session = broker.login(_AgentLoginHandler(notify))
-    except Exception as e:  # report any login failure back to the agent
-        return f"Login could not be completed: {e}"
-    return f"Login complete for {session.start_url}. Retry your request."
+    pending.thread = threading.Thread(target=_run, daemon=True)
+    pending.thread.start()
+    # Wait only for the prompt to appear (seconds), never for the human.
+    pending.prompted.wait(timeout=10)
+    if pending.error:
+        return f"Login could not be started: {pending.error}"
+    if pending.uri:
+        return (
+            f"Ask the human to open {pending.uri} and enter code {pending.code}. "
+            "Once they approve in the browser, call get_credentials again; the "
+            "session will be ready. No need to wait on this call."
+        )
+    return (
+        "Login starting. Ask the human to watch for a browser prompt, then retry get_credentials."
+    )
 
 
 def _render_credentials(result: GrantResult) -> str:
     c = result.credentials
     assert c is not None
+    # AWS_CREDENTIALS_EXPIRATION must be ISO-8601 for SDKs to parse it (a raw
+    # epoch float is rejected), matching what the CLI's switch/run emit.
+    expires = datetime.fromtimestamp(c.expiration, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     block = (
         f"AWS_ACCESS_KEY_ID={c.access_key_id}\n"
         f"AWS_SECRET_ACCESS_KEY={c.secret_access_key}\n"
         f"AWS_SESSION_TOKEN={c.session_token}\n"
-        f"AWS_CREDENTIALS_EXPIRATION={c.expiration}"
+        f"AWS_CREDENTIALS_EXPIRATION={expires}"
     )
     if result.advisory:
         block += f"\n# note: {result.advisory}"

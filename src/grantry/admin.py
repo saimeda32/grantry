@@ -61,7 +61,10 @@ def _principal_name(
             resp = idstore.describe_user(IdentityStoreId=identity_store_id, UserId=pid)
             name = str(resp.get("UserName", pid))
     except Exception:
-        name = pid
+        # A transient failure (throttle, network) must NOT be cached, or the
+        # principal is permanently stuck as its raw id for the whole crawl. Fall
+        # back to the id for this row only and let a later row retry the lookup.
+        return pid
     cache[key] = name
     return name
 

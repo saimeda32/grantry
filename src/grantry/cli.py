@@ -434,6 +434,14 @@ def _cmd_populate(
             name, i.account_id, i.role_name, start_url, sso_region, region
         )
     existing = _read_aws_config()
+    # A profile name that already exists but is NOT grantry-managed is a
+    # hand-written profile. Never overwrite it; skip it and tell the user, so
+    # populate can never silently clobber their own config.
+    conflicts = sorted(
+        n for n in desired if n in existing and existing[n].get("grantry_managed") != "true"
+    )
+    for n in conflicts:
+        del desired[n]
     plan = reconcile(existing, set(desired))
     if dry_run:
         for name in sorted(plan.to_add):
@@ -442,13 +450,22 @@ def _cmd_populate(
             print(f"= {name} (unchanged)")
         for name in sorted(plan.to_prune):
             print(f"- {name} (would remove)")
+        for name in conflicts:
+            print(f"! {name} (skipped: a hand-written profile with this name already exists)")
         print(
             f"\n{len(plan.to_add)} to add, {len(plan.kept)} kept, "
-            f"{len(plan.to_prune)} to remove. Re-run without --dry-run to apply."
+            f"{len(plan.to_prune)} to remove, {len(conflicts)} skipped. "
+            "Re-run without --dry-run to apply."
         )
         return 0
     _write_aws_config(desired, plan.to_prune)
-    print(f"Wrote {len(desired)} profiles, removed {len(plan.to_prune)} stale ones.")
+    msg = f"Wrote {len(desired)} profiles, removed {len(plan.to_prune)} stale ones."
+    if conflicts:
+        msg += (
+            f" Skipped {len(conflicts)} name(s) that collide with your hand-written "
+            f"profiles: {', '.join(conflicts)}."
+        )
+    print(msg)
     return 0
 
 
@@ -461,8 +478,12 @@ def _cmd_check(broker: Broker) -> int:
     try:
         idents = broker.identities()
     except NoSessionError:
-        print("Session present but identity listing failed; try 'grantry login --force'.")
+        print("Your session looks present but has expired. Run 'grantry login --force-refresh'.")
         return 202
+    except Exception as e:
+        print(f"Could not list your access: {e}")
+        print("Check your network and that the SSO region is correct, then try again.")
+        return 203
     print(f"Access OK: {len(idents)} identities reachable.")
     return 0
 

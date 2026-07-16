@@ -15,7 +15,12 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from grantry.identity import Identity
-from grantry.providers.base import Credentials, InteractionHandler, Session
+from grantry.providers.base import (
+    Credentials,
+    InteractionHandler,
+    RefreshExpiredError,
+    Session,
+)
 
 ClientFactory = Callable[[str, str], Any]
 
@@ -93,14 +98,22 @@ class AwsProvider:
 
     def refresh(self, session: Session) -> Session:
         if not (session.refresh_token and session.client_id and session.client_secret):
-            raise ValueError("session has no refresh token; a new login is required")
+            raise RefreshExpiredError("session has no refresh token; a new login is required")
         oidc = self._client_factory("sso-oidc", session.region)
-        token = oidc.create_token(
-            clientId=session.client_id,
-            clientSecret=session.client_secret,
-            grantType="refresh_token",
-            refreshToken=session.refresh_token,
-        )
+        try:
+            token = oidc.create_token(
+                clientId=session.client_id,
+                clientSecret=session.client_secret,
+                grantType="refresh_token",
+                refreshToken=session.refresh_token,
+            )
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            # A dead/rotated refresh token needs a new login; anything else
+            # (network, throttle) is transient and must propagate unchanged.
+            if code in ("InvalidGrantException", "invalid_grant", "UnauthorizedClientException"):
+                raise RefreshExpiredError("refresh token is no longer valid") from e
+            raise
         return Session(
             start_url=session.start_url,
             region=session.region,

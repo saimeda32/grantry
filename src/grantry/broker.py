@@ -16,7 +16,13 @@ from grantry.audit import AuditLog
 from grantry.config import state_path
 from grantry.identity import Identity
 from grantry.policy import Decision, Policy
-from grantry.providers.base import Credentials, InteractionHandler, Provider, Session
+from grantry.providers.base import (
+    Credentials,
+    InteractionHandler,
+    Provider,
+    RefreshExpiredError,
+    Session,
+)
 from grantry.secrets import SecretStore, token_name
 from grantry.ttl import format_ttl
 
@@ -32,30 +38,42 @@ class NoSessionError(Exception):
 
 
 @contextlib.contextmanager
-def _refresh_lock(path: str, timeout: float = 10.0) -> Iterator[None]:
-    """A tiny cross-platform advisory lock: create the lock file exclusively,
-    spin briefly if another process holds it, and always remove it. A stale lock
-    older than the timeout is broken so a crashed process cannot wedge refresh.
+def _refresh_lock(path: str, wait: float = 15.0, stale: float = 90.0) -> Iterator[bool]:
+    """A tiny cross-process advisory lock for token refresh.
+
+    Yields True if this call created (holds) the lock, False if it gave up
+    waiting and is proceeding without it. The lock file is removed on exit ONLY
+    by the process that created it, so a waiter that gives up never deletes the
+    holder's lock. A lock whose file is older than `stale` is assumed to belong
+    to a crashed process and is broken; `stale` is much larger than `wait` so a
+    slow-but-alive holder (throttled create_token retries) is never mistaken for
+    a dead one.
     """
     start = time.time()
+    acquired = False
     while True:
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             os.close(fd)
+            acquired = True
             break
         except FileExistsError:
+            broke_stale = False
             with contextlib.suppress(OSError):
-                if time.time() - os.path.getmtime(path) > timeout:
+                if time.time() - os.path.getmtime(path) > stale:
                     os.unlink(path)
-                    continue
-            if time.time() - start > timeout:
-                break  # give up waiting; proceed without the lock rather than hang
+                    broke_stale = True
+            if broke_stale:
+                continue
+            if time.time() - start > wait:
+                break  # proceed without the lock rather than hang forever
             time.sleep(0.1)
     try:
-        yield
+        yield acquired
     finally:
-        with contextlib.suppress(OSError):
-            os.unlink(path)
+        if acquired:
+            with contextlib.suppress(OSError):
+                os.unlink(path)
 
 
 @dataclass(frozen=True)
@@ -152,8 +170,14 @@ class Broker:
                 return latest
             try:
                 renewed = self._provider.refresh(session)
-            except Exception:
+            except RefreshExpiredError:
+                # The refresh token is genuinely dead; a new login is required.
                 return None
+            except Exception:
+                # A transient failure (network, throttle). Do NOT discard the
+                # session; re-raise so the caller can surface it and retry,
+                # rather than forcing a full browser login over a blip.
+                raise
             self._persist(renewed)
             if self._on_session:
                 self._on_session(renewed)
