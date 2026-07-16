@@ -6,7 +6,7 @@
 
 **Architecture:** A pure core (identity model, policy engine, audit log) with zero network or OS coupling, wrapped by two adapters: an AWS provider that speaks the SSO OIDC + SSO APIs through botocore's low-level clients, and a keychain-backed secret store. An asyncio MCP server composes them: it resolves identities, checks policy, mints credentials, and appends audit records. Everything network-facing is tested against a fake Identity Center (an in-process HTTP server), never real AWS.
 
-**Tech Stack:** Python >=3.10, uv (project + venv), ruff (lint+format), mypy strict, pytest + pytest-asyncio, botocore (low-level clients only), keyring (OS keychain), the official `mcp` Python SDK, PyYAML.
+**Tech Stack (all latest as of 2026-07-15):** Python >=3.10 (CI tests 3.10 and 3.14), uv (project + venv), ruff 0.15+ (lint+format), mypy 2.3+ strict, pytest 9.1+ + pytest-asyncio 1.4+, botocore 1.43+ (low-level clients only), keyring 25.7+ (OS keychain), the official `mcp` 1.28+ Python SDK, PyYAML 6.0.3+.
 
 ## Global Constraints
 
@@ -48,10 +48,10 @@ requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Sai Kiran Meda" }]
 dependencies = [
-    "botocore>=1.34",
-    "keyring>=25",
-    "mcp>=1.2",
-    "pyyaml>=6",
+    "botocore>=1.43",
+    "keyring>=25.7",
+    "mcp>=1.28",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
@@ -59,11 +59,11 @@ grantry = "grantry.cli:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=8",
-    "pytest-asyncio>=0.24",
-    "mypy>=1.11",
-    "ruff>=0.6",
-    "types-pyyaml>=6",
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "mypy>=2.3",
+    "ruff>=0.15",
+    "types-pyyaml>=6.0.12",
 ]
 
 [build-system]
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
