@@ -165,6 +165,12 @@ def main(argv: list[str] | None = None) -> int:
     p_assign.add_argument("--ttl", default="1h")
     p_assign.add_argument("--visualize", action="store_true")
     p_assign.add_argument("-o", "--out", default="grantry-assignments.html")
+    p_assign.add_argument(
+        "--snapshot", action="store_true", help="save this crawl for later comparison"
+    )
+    p_assign.add_argument(
+        "--diff", action="store_true", help="compare this crawl to the last snapshot"
+    )
     p_install = sub.add_parser(
         "install", help="add grantry to an AI client's MCP config (auto-detects all if none named)"
     )
@@ -300,7 +306,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "admin":
         if args.admin_command == "assignments":
             return _cmd_admin_assignments(
-                broker, region, args.as_identity, args.ttl, args.visualize, args.out
+                broker,
+                region,
+                args.as_identity,
+                args.ttl,
+                args.visualize,
+                args.out,
+                args.snapshot,
+                args.diff,
             )
         return 2
 
@@ -308,7 +321,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_admin_assignments(
-    broker: Broker, region: str, as_identity: str, ttl: str, visualize: bool, out: str
+    broker: Broker,
+    region: str,
+    as_identity: str,
+    ttl: str,
+    visualize: bool,
+    out: str,
+    snapshot: bool = False,
+    diff: bool = False,
 ) -> int:
     import sys as _sys
 
@@ -347,6 +367,32 @@ def _cmd_admin_assignments(
         print("The identity you crawled with may lack sso-admin/organizations access.")
         return 1
     print("", file=_sys.stderr)
+
+    if diff:
+        from grantry.snapshots import diff_assignments, latest_snapshot, save_snapshot
+
+        previous = latest_snapshot()
+        if previous is None:
+            print("No earlier snapshot to compare against. Saving this one as the baseline.")
+            save_snapshot(assignments, _iso_now().replace(":", "-"))
+            return 0
+        added, removed = diff_assignments(previous, assignments)
+        if not added and not removed:
+            print("No access changes since the last snapshot.")
+        for a in added:
+            print(f"+ {a.principal_name} gained {a.permission_set_name} on {a.account_name}")
+        for a in removed:
+            print(f"- {a.principal_name} lost {a.permission_set_name} on {a.account_name}")
+        print(f"\n{len(added)} added, {len(removed)} removed.")
+        save_snapshot(assignments, _iso_now().replace(":", "-"))
+        return 0
+
+    if snapshot:
+        from grantry.snapshots import save_snapshot
+
+        path = save_snapshot(assignments, _iso_now().replace(":", "-"))
+        print(f"Saved a snapshot of {len(assignments)} assignments to {path}")
+        return 0
 
     if visualize:
         from grantry.render import render_assignments
