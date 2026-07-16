@@ -1,4 +1,12 @@
-from grantry.humanops import env_from_credentials, format_exports, profile_block, reconcile
+from grantry.humanops import (
+    append_profiles,
+    env_from_credentials,
+    format_exports,
+    parse_profiles,
+    profile_block,
+    reconcile,
+    strip_profiles,
+)
 from grantry.providers.base import Credentials
 
 
@@ -21,8 +29,14 @@ def test_format_exports_is_shell_evalable():
 
 
 def test_profile_block():
-    block = profile_block("prod.ReadOnlyAccess", "111122223333", "ReadOnlyAccess",
-                          "https://mlp.awsapps.com/start", "us-east-1", "us-west-2")
+    block = profile_block(
+        "prod.ReadOnlyAccess",
+        "111122223333",
+        "ReadOnlyAccess",
+        "https://mlp.awsapps.com/start",
+        "us-east-1",
+        "us-west-2",
+    )
     assert "[profile prod.ReadOnlyAccess]" in block
     assert "sso_account_id = 111122223333" in block
     assert "sso_role_name = ReadOnlyAccess" in block
@@ -44,3 +58,35 @@ def test_reconcile_add_update_prune():
     assert plan.to_prune == {"old.Role"}
     assert "my-hand-written" not in plan.to_prune
     assert plan.kept == {"prod.ReadOnlyAccess"}
+
+
+CONFIG = """# my aws config
+[profile hand-written]
+region = us-east-1
+
+[profile prod.ReadOnlyAccess]
+sso_role_name = ReadOnlyAccess
+grantry_managed = true
+"""
+
+
+def test_parse_profiles():
+    profiles = parse_profiles(CONFIG)
+    assert set(profiles) == {"hand-written", "prod.ReadOnlyAccess"}
+    assert profiles["prod.ReadOnlyAccess"]["grantry_managed"] == "true"
+    assert profiles["hand-written"]["region"] == "us-east-1"
+
+
+def test_strip_profiles_preserves_others_and_comments():
+    out = strip_profiles(CONFIG, {"prod.ReadOnlyAccess"})
+    assert "# my aws config" in out
+    assert "[profile hand-written]" in out
+    assert "[profile prod.ReadOnlyAccess]" not in out
+    assert "grantry_managed" not in out
+
+
+def test_append_profiles():
+    out = append_profiles("[profile a]\nregion = x\n", ["[profile b]\nregion = y"])
+    assert "[profile a]" in out
+    assert "[profile b]" in out
+    assert out.endswith("\n")

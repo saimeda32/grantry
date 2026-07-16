@@ -76,3 +76,49 @@ def reconcile(existing: dict[str, dict[str, str]], desired: set[str]) -> Reconci
     to_prune = managed - desired
     kept = managed & desired
     return ReconcilePlan(to_add=to_add, to_prune=to_prune, kept=kept)
+
+
+def parse_profiles(text: str) -> dict[str, dict[str, str]]:
+    """Parse an ~/.aws/config body into {profile_name: {key: value}}. Only
+    [profile NAME] sections are returned. Tolerant of blank lines and comments.
+    """
+    profiles: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            header = stripped[1:-1].strip()
+            current = header[len("profile ") :] if header.startswith("profile ") else None
+            if current is not None:
+                profiles[current] = {}
+        elif current is not None and "=" in stripped and not stripped.startswith("#"):
+            key, _, value = stripped.partition("=")
+            profiles[current][key.strip()] = value.strip()
+    return profiles
+
+
+def strip_profiles(text: str, names: set[str]) -> str:
+    """Remove the [profile NAME] sections for the given names, preserving every
+    other line (comments and hand-written profiles) verbatim.
+    """
+    if not names:
+        return text
+    out: list[str] = []
+    skipping = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            header = stripped[1:-1].strip()
+            name = header[len("profile ") :] if header.startswith("profile ") else None
+            skipping = name in names
+        if not skipping:
+            out.append(line)
+    return "".join(out)
+
+
+def append_profiles(text: str, blocks: list[str]) -> str:
+    """Append profile blocks to a config body, separated by blank lines."""
+    body = text.rstrip("\n")
+    parts = [body] if body else []
+    parts.extend(blocks)
+    return "\n\n".join(parts) + "\n"

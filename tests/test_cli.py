@@ -1,5 +1,13 @@
-from grantry.cli import build_broker, main
+import time
+
+from grantry.audit import AuditLog
+from grantry.broker import Broker
+from grantry.cli import _cmd_populate, _cmd_run, _cmd_switch, build_broker, main
+from grantry.identity import Identity
+from grantry.policy import Policy
 from grantry.providers.aws import AwsProvider
+from grantry.providers.base import Credentials, Session
+from grantry.secrets import SecretStore
 
 
 def test_build_broker_wires_aws_provider(tmp_path, monkeypatch):
@@ -46,3 +54,105 @@ def test_no_instance_anywhere_raises(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit):
         main(["ls"])
+
+
+class FakeProvider:
+    start_url = "https://mlp.awsapps.com/start"
+    region = "us-east-1"
+
+    def name(self):
+        return "aws"
+
+    def start_login(self, handler):
+        return Session(self.start_url, self.region, "tok", time.time() + 3600)
+
+    def refresh(self, session):
+        return session
+
+    def list_identities(self, session):
+        return [
+            Identity("111122223333", "prod", "ReadOnlyAccess"),
+            Identity("444455556666", "dev-pay", "AWSPowerUserAccess"),
+        ]
+
+    def mint(self, session, ident, ttl):
+        return Credentials("AKIA", "sec", "sess", time.time() + 3600)
+
+
+def _fake_broker(tmp_path, monkeypatch):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    (tmp_path / "policy.yaml").write_text("humans:\n  max_ttl: 12h\n")
+    b = Broker(
+        FakeProvider(),
+        Policy.load(tmp_path / "policy.yaml"),
+        AuditLog(),
+        SecretStore(),
+        clock_iso=lambda: "t",
+    )
+
+    class H:
+        def on_verification(self, uri, code): ...
+        def wait(self): ...
+
+    b.login(H())
+    return b
+
+
+def test_run_executes_command_with_credentials(tmp_path, monkeypatch, capfd):
+    b = _fake_broker(tmp_path, monkeypatch)
+    # Print one of the injected env vars from the child to prove it is set.
+    # capfd (not capsys) captures the child process's real stdout fd.
+    code = _cmd_run(
+        b,
+        "us-east-1",
+        "prod/ReadOnlyAccess",
+        "1h",
+        ["--", "python", "-c", "import os;print(os.environ['AWS_ACCESS_KEY_ID'])"],
+    )
+    out = capfd.readouterr().out
+    assert code == 0
+    assert "AKIA" in out
+
+
+def test_switch_prints_exports(tmp_path, monkeypatch, capsys):
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_switch(b, "us-east-1", "prod/ReadOnlyAccess", "1h")
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "export AWS_ACCESS_KEY_ID=AKIA" in out
+    assert "export AWS_SESSION_TOKEN=sess" in out
+
+
+def test_populate_reconciles_config(tmp_path, monkeypatch, capsys):
+    b = _fake_broker(tmp_path, monkeypatch)
+    cfg = tmp_path / "config"
+    cfg.write_text(
+        "[profile hand-written]\nregion = us-east-1\n\n"
+        "[profile stale.Role]\ngrantry_managed = true\n"
+    )
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(cfg))
+
+    code = _cmd_populate(b, "https://mlp.awsapps.com/start", "us-east-1", None, dry_run=False)
+    assert code == 0
+    body = cfg.read_text()
+    # New managed profiles written:
+    assert "[profile prod.ReadOnlyAccess]" in body
+    assert "[profile dev-pay.AWSPowerUserAccess]" in body
+    # Hand-written profile preserved:
+    assert "[profile hand-written]" in body
+    # Stale managed profile pruned:
+    assert "[profile stale.Role]" not in body
+
+
+def test_populate_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
+    b = _fake_broker(tmp_path, monkeypatch)
+    cfg = tmp_path / "config"
+    cfg.write_text("[profile hand-written]\nregion = us-east-1\n")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(cfg))
+    before = cfg.read_text()
+
+    code = _cmd_populate(b, "https://mlp.awsapps.com/start", "us-east-1", None, dry_run=True)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "+ prod.ReadOnlyAccess" in out
+    assert cfg.read_text() == before  # dry run changed nothing
