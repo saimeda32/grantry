@@ -1,9 +1,9 @@
 # grantry
 
-A local credential broker for humans and AI agents, AWS-first.
+**A local credential broker for humans and AI agents. AWS first.**
 
-grantry logs into AWS Identity Center once and hands out short-lived
-credentials on demand. Humans get a clean command line. AI coding agents get
+grantry logs you into AWS IAM Identity Center once, then hands out short lived
+credentials on demand. You get a clean command line. Your AI coding agents get
 the same credentials over MCP, but only for the accounts and roles you allow,
 only for as long as you permit, and every request is written to an audit log.
 
@@ -11,15 +11,23 @@ Everything stays on your machine. grantry talks to AWS and nothing else. No
 account, no server, no telemetry. Tokens live in the OS keychain, never in a
 plain file, and no secret is ever written to a log.
 
-## Why
+[![CI](https://github.com/saimeda32/grantry/actions/workflows/ci.yml/badge.svg)](https://github.com/saimeda32/grantry/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+
+---
+
+## Why grantry exists
 
 Every other credential tool assumes a person is at the keyboard. But agents are
-now heavy users of cloud credentials, and they are bad at logging in: they
-cannot click a device-flow link, and they stall when a session expires. The
-common workaround is pasting long-lived keys into the agent's environment,
-which never expire and are never audited. grantry removes that shortcut: the
-agent asks, grantry checks your rules, and hands over short-lived credentials
-or a clear refusal.
+now heavy users of cloud credentials, and they are bad at logging in. They
+cannot click a device flow link, and they stall when a session expires. The
+common workaround is pasting long lived keys into the agent's environment.
+Those keys never expire and are never audited. That is a real security problem.
+
+grantry removes the workaround. The agent asks, grantry checks your rules, and
+hands over short lived credentials or a clear refusal. You keep one login, one
+policy, and one audit trail across every agent on your machine.
 
 ## Install
 
@@ -29,66 +37,73 @@ uvx grantry --help        # run without installing
 pipx install grantry
 ```
 
-## Point it at your Identity Center
+Works on macOS, Linux, and Windows. Python 3.10 or newer.
 
-Give grantry the instance once, on any command:
+## Quick start
 
 ```bash
+# 1. Point grantry at your Identity Center, just once. It remembers.
 grantry --start-url https://your-org.awsapps.com/start --region us-east-1 login
-```
 
-grantry remembers it (in `~/.grantry/instance.json`), so every later command
-just works with no flags:
+# 2. Generate a starter policy from your real access.
+grantry init
 
-```bash
+# 3. See what you can reach.
 grantry ls
-grantry login
+
+# 4. Run any command as a role.
+grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls
 ```
 
-You can still override per command with `--start-url`/`--region`, or set
-`GRANTRY_SSO_START_URL` and `GRANTRY_SSO_REGION` if you prefer env vars.
+After `grantry login`, the native `aws` CLI, boto3, and Terraform work too. Run
+`grantry populate` once to create the matching profiles in `~/.aws/config`, then
+use `aws --profile ...` with no grantry in the loop.
 
 ## Commands
 
+| Command | What it does |
+|---|---|
+| `grantry login` | Log in to Identity Center once, for all accounts and roles. |
+| `grantry ls` | List the account and role identities you can use. |
+| `grantry run <id> -- <cmd>` | Run a command as a chosen identity. |
+| `grantry switch <id>` | Print shell exports so `eval "$(grantry switch <id>)"` adopts an identity. |
+| `grantry populate` | Write `~/.aws/config` profiles for your access. Adds, updates, and prunes only its own profiles. |
+| `grantry check` | Diagnose your session and access, with clear exit codes. |
+| `grantry init` | Generate a working policy from your real access. |
+| `grantry audit` | Print the grant history, or write an HTML timeline with `--visualize`. |
+| `grantry graph` | Write an HTML map of what your agents can reach under the policy. |
+| `grantry mcp` | Run grantry as an MCP server for agents. |
+| `grantry install [client]` | Add grantry to an AI client's MCP config. Auto detects all if none named. |
+| `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. |
+
+## Use it with your AI agents
+
+One command wires grantry into your AI clients:
+
 ```bash
-grantry login     # log in to Identity Center (opens a browser code prompt)
-grantry ls        # list the account/role identities you can use
-grantry audit     # print the grant history
-grantry mcp       # run grantry as an MCP server for agents (stdio)
-```
-
-## Let an agent use it
-
-One command wires grantry into your AI clients' MCP config:
-
-```bash
-grantry install            # auto-detect every client you have and add grantry
+grantry install            # auto detect every client you have
 grantry install cursor     # or a specific one
 grantry install --dry-run  # preview without writing
 ```
 
-Supported clients: `claude-code`, `claude-desktop`, `cursor`, `windsurf`,
-`vscode`. grantry is added without disturbing your other MCP servers, and each
-client is tagged with its own audit label. Restart the client to load it.
+Supported: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vscode`.
+grantry is added without touching your other MCP servers, and each client gets
+its own audit label. Restart the client to load it.
 
-Under the hood it points the client at `grantry mcp`, which exposes four tools:
-
-- `whoami` reports whether a session is active and when it expires.
-- `list_identities` lists the account/role names the agent could request.
-- `get_credentials(identity, ttl)` mints short-lived credentials for an allowed
-  identity, or returns a short refusal with the reason. Nothing is minted on a
-  refusal.
-- `check_access(identity)` reports whether policy would allow an identity,
-  without minting.
+The agent then has four tools: `whoami`, `list_identities`,
+`get_credentials(identity, ttl)`, and `check_access(identity)`. If no one is
+logged in, the agent can call `request_login`, which notifies you and waits for
+your approval, then resumes on its own.
 
 ## Policy
 
-Write `~/.grantry/policy.yaml`. See [examples/policy.yaml](examples/policy.yaml):
+Write `~/.grantry/policy.yaml`, or let `grantry init` generate it from your real
+access. See [examples/policy.yaml](examples/policy.yaml).
 
 ```yaml
 agents:
   allow:
-    - identity: "*/ReadOnlyAccess"
+    - identity: "*/AWSReadOnlyAccess"
     - identity: "dev-*/AWSPowerUserAccess"
   deny:
     - identity: "*prod*/*Admin*"
@@ -100,40 +115,69 @@ humans:
 Three rules govern it:
 
 1. A deny always beats an allow.
-2. For agents, anything not allowed is refused (safe by default).
+2. For agents, anything not allowed is refused. Safe by default.
 3. For you, anything not mentioned is allowed.
 
-Every request is capped to its section's `max_ttl`. If the policy file is
-missing or invalid, agents get nothing and humans still work, so a mistake
-fails safe.
+An identity is `account-name/role-name`, and `*` is a wildcard, so
+`dev-*/AWSReadOnlyAccess` means read only in any account whose name starts with
+`dev`.
 
 A note on TTL and AWS: grantry cannot shorten an SSO credential below the
-lifetime AWS issues it with, because the reserved SSO roles do not permit
-client-side re-assumption. grantry reports the real AWS expiration (so SDKs
-refresh correctly) and, when AWS hands back a credential that outlives your
-policy cap, adds an advisory. The real control for short sessions is the
-permission set's session duration, set by an admin in IAM Identity Center.
+lifetime AWS issues it with, because the reserved SSO roles do not allow client
+side re assumption. grantry reports the real AWS expiration and adds an advisory
+when a credential outlives your policy cap. The real control for short sessions
+is the permission set session duration, set by an admin in IAM Identity Center.
 
-An identity is `account-name/role-name`, and `*` is a wildcard, so
-`dev-*/ReadOnlyAccess` means read-only in any account whose name starts with
-`dev`.
+## Admin: see who has what across the org
+
+```bash
+grantry admin assignments --as your-mgmt/AWSAdministratorAccess --visualize
+```
+
+This crawls the whole organization and writes an interactive graph of
+principals, permission sets, and accounts, with the links between them. It is
+safe to offer because AWS is the gatekeeper: only an identity that can assume a
+management or delegated admin role gets any data. The crawl caches principal
+names and uses retry hardening, so it handles organizations with thousands of
+assignments.
+
+## How your data is stored
+
+grantry uses no database. It is a single user local tool.
+
+- **Secrets** (SSO tokens) live in the OS keychain, through `keyring`.
+- **State** lives as plain files in `~/.grantry/`: `instance.json`,
+  `policy.yaml`, and an append only `audit.jsonl` (mode 0600).
+- **Interop**: `grantry login` also writes the AWS CLI token cache in
+  `~/.aws/sso/cache/`, the same file `aws sso login` writes, so the native
+  tools work.
+
+Everything survives reboots. To remove grantry state: `grantry logout` and
+`rm -rf ~/.grantry`.
 
 ## Security
 
-- Secrets live only in the OS keychain. Nothing sensitive is written to a file
-  or a log; redaction happens in one place, automatically.
+- Secrets live only in the OS keychain. Redaction happens in one place, so no
+  log line can leak a token.
 - The MCP server is not a network service. It talks to the agent that started
   it over stdio.
-- Credentials are short-lived and scoped to what policy allows.
-- Every grant is recorded in `~/.grantry/audit.jsonl` (mode 0600), and never
-  includes the credentials themselves.
+- Credentials are short lived and scoped to what the policy allows.
+- Every grant is recorded in `~/.grantry/audit.jsonl`, and never includes the
+  credentials themselves.
 
-## Status
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-Phase 1: AWS Identity Center, the CLI, and the MCP server. The provider layer
-is written so Azure and GCP can be added without touching the engine, policy,
-audit, or MCP surface. See `docs/OVERVIEW.md` for the full picture and roadmap.
+## Roadmap
+
+grantry v1 covers AWS Identity Center. The provider layer is written so Azure
+and GCP can be added without touching the engine, policy, audit, or MCP
+surface. Team mode (shared, signed policy) comes after that.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: fork, branch, write a test,
+keep `ruff`, `mypy`, and `pytest` green, open a pull request.
 
 ## License
 
-Apache-2.0.
+[Apache 2.0](LICENSE).
