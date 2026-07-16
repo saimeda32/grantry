@@ -45,9 +45,18 @@ class TerminalHandler(InteractionHandler):
 
 
 def build_broker(start_url: str, region: str) -> Broker:
+    from grantry.awscli_cache import write_sso_cache
+
     provider = AwsProvider(start_url, region)
     policy = Policy.load(state_path("policy.yaml"))
-    return Broker(provider, policy, AuditLog(), SecretStore(), clock_iso=_iso_now)
+    return Broker(
+        provider,
+        policy,
+        AuditLog(),
+        SecretStore(),
+        clock_iso=_iso_now,
+        on_session=write_sso_cache,
+    )
 
 
 def _instance(args: argparse.Namespace) -> tuple[str, str]:
@@ -133,6 +142,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "login":
         session = broker.login(TerminalHandler())
         print(f"Logged in to {session.start_url}.")
+        print("The native 'aws' CLI and SDKs can now use this session too.")
+        print("Run 'grantry populate' once to create matching ~/.aws/config profiles.")
         return 0
 
     if args.command == "ls":

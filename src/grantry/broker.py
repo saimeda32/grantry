@@ -45,6 +45,7 @@ class Broker:
         *,
         clock_iso: Callable[[], str],
         now: Callable[[], float] = time.time,
+        on_session: Callable[[Session], None] | None = None,
     ) -> None:
         self._provider = provider
         self._policy = policy
@@ -52,6 +53,9 @@ class Broker:
         self._secrets = secrets
         self._now = now
         self._clock_iso = clock_iso
+        # Fired whenever a fresh session is obtained (login or refresh). The CLI
+        # uses it to mirror the token into the AWS CLI cache for native use.
+        self._on_session = on_session
 
     def _start_url(self) -> str:
         return self._provider.start_url
@@ -59,6 +63,8 @@ class Broker:
     def login(self, handler: InteractionHandler) -> Session:
         session = self._provider.start_login(handler)
         self._persist(session)
+        if self._on_session:
+            self._on_session(session)
         return session
 
     def _persist(self, session: Session) -> None:
@@ -100,6 +106,8 @@ class Broker:
             except Exception:
                 return None
             self._persist(renewed)
+            if self._on_session:
+                self._on_session(renewed)
             return renewed
         return None
 
