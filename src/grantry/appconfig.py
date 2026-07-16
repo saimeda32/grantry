@@ -22,7 +22,7 @@ from grantry.config import state_path
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover - exercised only on Python 3.10
-    import tomli as tomllib  # type: ignore[import-not-found]
+    import tomli as tomllib
 
 _FILE = "config.toml"
 _DEFAULT_TTL = "1h"

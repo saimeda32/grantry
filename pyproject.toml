@@ -56,3 +56,9 @@ disallow_untyped_calls = false
 [[tool.mypy.overrides]]
 module = ["botocore.*"]
 ignore_missing_imports = true
+
+# tomli is only installed on Python < 3.11 (a conditional dependency). On 3.11+
+# it is absent, so tell mypy not to error when it cannot resolve the import.
+[[tool.mypy.overrides]]
+module = ["tomli"]
+ignore_missing_imports = true
