@@ -124,6 +124,33 @@ def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
     assert "dev-pay/AWSPowerUserAccess" in keys
 
 
+def test_login_handler_auto_opens_browser(monkeypatch):
+    import webbrowser
+
+    from grantry.cli import TerminalHandler
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
+    monkeypatch.delenv("GRANTRY_NO_BROWSER", raising=False)
+    url = "https://x.awsapps.com/start/#/device?user_code=AB-CD"
+    TerminalHandler().on_verification(url, "AB-CD")
+    assert opened == [url]
+
+
+def test_login_handler_respects_no_browser(monkeypatch, capsys):
+    import webbrowser
+
+    from grantry.cli import TerminalHandler
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
+    monkeypatch.setenv("GRANTRY_NO_BROWSER", "1")
+    TerminalHandler().on_verification("https://x/verify?code=AB", "AB")
+    out = capsys.readouterr().out
+    assert opened == []
+    assert "AB" in out  # falls back to printing the code to type
+
+
 def test_run_executes_command_with_credentials(tmp_path, monkeypatch, capfd):
     b = _fake_broker(tmp_path, monkeypatch)
     # Print one of the injected env vars from the child to prove it is set.

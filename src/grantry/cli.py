@@ -40,11 +40,23 @@ def _iso_now() -> str:
 
 class TerminalHandler(InteractionHandler):
     def on_verification(self, verification_uri: str, user_code: str) -> None:
-        print(f"To authorize, open:\n  {verification_uri}\nand confirm the code: {user_code}")
+        import webbrowser
+
+        # The URL already carries the code, so approving is usually one click.
+        # Skip the auto-open on headless boxes or when the user opts out.
+        opened = False
+        if os.environ.get("GRANTRY_NO_BROWSER") != "1":
+            with contextlib.suppress(Exception):
+                opened = webbrowser.open(verification_uri)
+        if opened:
+            print(f"Opened your browser to approve this login (code {user_code}).")
+            print(f"If it did not open, visit:\n  {verification_uri}")
+        else:
+            print(f"To authorize, open:\n  {verification_uri}\nand confirm the code: {user_code}")
 
     def wait(self) -> None:
-        with contextlib.suppress(EOFError):
-            input("Press Enter after you have approved in the browser... ")
+        # No prompt to press: the provider polls until you approve in the browser.
+        print("Waiting for you to approve in the browser...")
 
 
 def build_broker(start_url: str, region: str) -> Broker:
