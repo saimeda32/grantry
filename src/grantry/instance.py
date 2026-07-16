@@ -26,7 +26,7 @@ class InstanceConfig:
 
 def _short_name(start_url: str) -> str:
     # A friendly handle derived from the start URL host, e.g.
-    # https://legalplans.awsapps.com/start -> "legalplans".
+    # https://acme.awsapps.com/start -> "acme".
     host = start_url.split("://", 1)[-1].split("/", 1)[0]
     return host.split(".", 1)[0] or host
 

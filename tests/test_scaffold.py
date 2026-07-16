@@ -5,11 +5,11 @@ from grantry.scaffold import scaffold_policy
 
 def idents():
     return [
-        Identity("1", "mlp-dev", "AWSReadOnlyAccess"),
-        Identity("1", "mlp-dev", "AWSAdministratorAccess"),
-        Identity("2", "mlp-prod", "AWSPowerUserAccess"),
-        Identity("3", "mlp-master", "AWSAdministratorAccess"),
-        Identity("4", "mlp-log", "XSOARArchivalsS3Access"),  # a custom role
+        Identity("1", "acme-dev", "AWSReadOnlyAccess"),
+        Identity("1", "acme-dev", "AWSAdministratorAccess"),
+        Identity("2", "acme-prod", "AWSPowerUserAccess"),
+        Identity("3", "acme-master", "AWSAdministratorAccess"),
+        Identity("4", "acme-log", "DataPipelineS3Access"),  # a custom role
     ]
 
 
@@ -26,7 +26,7 @@ def test_warns_how_to_restrict():
     # restrictive rules are offered as commented guidance
     assert '#   - identity: "*/AWSReadOnlyAccess"' in out
     assert '#   - identity: "*/AWSAdministratorAccess"' in out
-    assert "mlp-prod/*" in out
+    assert "acme-prod/*" in out
 
 
 def test_lists_all_identities_as_comments():

@@ -35,10 +35,10 @@ def test_instance_is_remembered_after_first_use(tmp_path, monkeypatch):
     from grantry.instance import load_instance
 
     # First run supplies the instance via flags; it should be remembered.
-    main(["--start-url", "https://mlp.awsapps.com/start", "--region", "us-east-1", "ls"])
+    main(["--start-url", "https://acme.awsapps.com/start", "--region", "us-east-1", "ls"])
     saved = load_instance()
     assert saved is not None
-    assert saved.start_url == "https://mlp.awsapps.com/start"
+    assert saved.start_url == "https://acme.awsapps.com/start"
     assert saved.region == "us-east-1"
 
     # A later run with no flags and no env must still resolve (from the saved file).
@@ -57,7 +57,7 @@ def test_no_instance_anywhere_raises(tmp_path, monkeypatch):
 
 
 class FakeProvider:
-    start_url = "https://mlp.awsapps.com/start"
+    start_url = "https://acme.awsapps.com/start"
     region = "us-east-1"
 
     def name(self):
@@ -98,6 +98,32 @@ def _fake_broker(tmp_path, monkeypatch):
     return b
 
 
+def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
+    import grantry.cli as climod
+    from grantry.idcache import read_keys
+
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    monkeypatch.setenv("GRANTRY_SSO_START_URL", "https://acme.awsapps.com/start")
+    monkeypatch.setenv("GRANTRY_SSO_REGION", "us-east-1")
+    (tmp_path / "policy.yaml").write_text("humans:\n  max_ttl: 12h\n")
+
+    def fake_build(start, region):
+        return Broker(
+            FakeProvider(),
+            Policy.load(tmp_path / "policy.yaml"),
+            AuditLog(),
+            SecretStore(),
+            clock_iso=lambda: "t",
+        )
+
+    monkeypatch.setattr(climod, "build_broker", fake_build)
+    rc = main(["login"])
+    assert rc == 0
+    keys = read_keys()
+    assert "prod/ReadOnlyAccess" in keys
+    assert "dev-pay/AWSPowerUserAccess" in keys
+
+
 def test_run_executes_command_with_credentials(tmp_path, monkeypatch, capfd):
     b = _fake_broker(tmp_path, monkeypatch)
     # Print one of the injected env vars from the child to prove it is set.
@@ -132,7 +158,7 @@ def test_populate_reconciles_config(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.setenv("AWS_CONFIG_FILE", str(cfg))
 
-    code = _cmd_populate(b, "https://mlp.awsapps.com/start", "us-east-1", None, dry_run=False)
+    code = _cmd_populate(b, "https://acme.awsapps.com/start", "us-east-1", None, dry_run=False)
     assert code == 0
     body = cfg.read_text()
     # New managed profiles written:
@@ -151,7 +177,7 @@ def test_populate_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("AWS_CONFIG_FILE", str(cfg))
     before = cfg.read_text()
 
-    code = _cmd_populate(b, "https://mlp.awsapps.com/start", "us-east-1", None, dry_run=True)
+    code = _cmd_populate(b, "https://acme.awsapps.com/start", "us-east-1", None, dry_run=True)
     out = capsys.readouterr().out
     assert code == 0
     assert "+ prod.ReadOnlyAccess" in out
@@ -189,6 +215,29 @@ def test_complete_identities_empty_without_cache(tmp_path, monkeypatch, capsys):
     rc = main(["_complete-identities"])
     assert rc == 0
     assert capsys.readouterr().out == ""
+
+
+def test_human_duration():
+    from grantry.cli import _human_duration
+
+    assert _human_duration(7 * 3600 + 12 * 60) == "7h 12m"
+    assert _human_duration(3 * 3600) == "3h"
+    assert _human_duration(45 * 60) == "45m"
+    assert _human_duration(30) == "under a minute"
+
+
+def test_status_overview_logged_out(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    monkeypatch.setenv("GRANTRY_SSO_START_URL", "https://example.awsapps.com/start")
+    monkeypatch.setenv("GRANTRY_SSO_REGION", "us-east-1")
+    rc = main(["status"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "grantry " in out
+    assert "Instance:" in out
+    assert "logged out" in out.lower()
+    assert "Policy:" in out
+    assert "Audit:" in out
 
 
 def test_instances_and_use(tmp_path, monkeypatch, capsys):

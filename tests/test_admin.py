@@ -43,8 +43,8 @@ class FakeIdentityStore:
 class FakeOrgs:
     def list_accounts(self, NextToken=None):  # noqa: N803
         if NextToken is None:
-            return {"Accounts": [{"Id": "111", "Name": "mlp-dev"}], "NextToken": "p2"}
-        return {"Accounts": [{"Id": "222", "Name": "mlp-prod"}]}
+            return {"Accounts": [{"Id": "111", "Name": "acme-dev"}], "NextToken": "p2"}
+        return {"Accounts": [{"Id": "222", "Name": "acme-prod"}]}
 
 
 def test_crawl_aggregates_and_caches_principal_names():
@@ -62,7 +62,7 @@ def test_crawl_aggregates_and_caches_principal_names():
     names = {a.principal_name for a in assignments}
     assert names == {"Platform Engineering"}
     accts = {a.account_name for a in assignments}
-    assert accts == {"mlp-dev", "mlp-prod"}
+    assert accts == {"acme-dev", "acme-prod"}
     psets = {a.permission_set_name for a in assignments}
     assert psets == {"AWSReadOnlyAccess", "AWSAdministratorAccess"}
     # the group g-1 was described only ONCE despite 4 assignments (name cache)
@@ -83,8 +83,8 @@ def test_render_assignments_is_interactive_graph():
     from grantry.admin import Assignment
 
     rows = [
-        Assignment("GROUP", "g1", "Platform Eng", "AWSReadOnlyAccess", "111", "mlp-dev"),
-        Assignment("USER", "u1", "casey", "AWSAdministratorAccess", "222", "mlp-prod"),
+        Assignment("GROUP", "g1", "Platform Eng", "AWSReadOnlyAccess", "111", "acme-dev"),
+        Assignment("USER", "u1", "casey", "AWSAdministratorAccess", "222", "acme-prod"),
     ]
     html = render_assignments(rows, "2026-07-16")
     # the injected data is present and the graph JS is there (node-link, not a table)

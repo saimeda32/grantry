@@ -5,4 +5,8 @@ __pycache__/
 .ruff_cache/
 .pytest_cache/
 dist/
-dist/
+
+# Internal planning and scratch, never published
+docs/superpowers/
+.claude/
+*.local.md

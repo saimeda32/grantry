@@ -38,6 +38,9 @@ CLIENTS: dict[str, Client] = {
     "cursor": Client("cursor", "Cursor", "~/.cursor/mcp.json", "mcpServers"),
     "windsurf": Client("windsurf", "Windsurf", "~/.codeium/windsurf/mcp_config.json", "mcpServers"),
     "vscode": Client("vscode", "VS Code", ".vscode/mcp.json", "servers"),
+    "copilot-cli": Client(
+        "copilot-cli", "GitHub Copilot CLI", "~/.copilot/mcp-config.json", "mcpServers"
+    ),
 }
 
 

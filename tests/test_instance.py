@@ -12,9 +12,9 @@ from grantry.instance import (
 def test_save_then_load(tmp_path, monkeypatch):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     assert load_instance() is None
-    save_instance("https://legalplans.awsapps.com/start", "us-east-1")
+    save_instance("https://acme.awsapps.com/start", "us-east-1")
     got = load_instance()
-    assert got == InstanceConfig("https://legalplans.awsapps.com/start", "us-east-1")
+    assert got == InstanceConfig("https://acme.awsapps.com/start", "us-east-1")
 
 
 def test_multiple_instances_and_switch(tmp_path, monkeypatch):

@@ -190,7 +190,7 @@ any time with `grantry audit`.
 
 - **`grantry install [client]` / `grantry uninstall [client]`**
   Wires grantry into an AI client's MCP config (Claude Code, Claude Desktop,
-  Cursor, Windsurf, VS Code), or removes it. Auto detects every client if you
+  Cursor, Windsurf, VS Code, GitHub Copilot CLI), or removes it. Auto detects every client if you
   name none. Each client gets its own audit label.
 
 ### For admins

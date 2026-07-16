@@ -13,7 +13,7 @@ SHELLS = ("bash", "zsh", "fish")
 # Kept in sync with the subcommands registered in cli.py.
 _SUBS = (
     "login logout version instances use ls audit mcp graph run switch "
-    "credential-process console populate check init admin install uninstall completion"
+    "credential-process console populate check status init admin install uninstall completion"
 )
 
 _BASH = """\

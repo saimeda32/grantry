@@ -12,7 +12,7 @@ POSIX = not sys.platform.startswith("win")
 def test_cache_path_matches_aws_cli_key(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    url = "https://legalplans.awsapps.com/start"
+    url = "https://acme.awsapps.com/start"
     expected = hashlib.sha1(url.encode()).hexdigest() + ".json"
     assert sso_cache_path(url).name == expected
 
@@ -21,7 +21,7 @@ def test_write_sso_cache_format_and_perms(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     session = Session(
-        "https://legalplans.awsapps.com/start",
+        "https://acme.awsapps.com/start",
         "us-east-1",
         "the-token",
         1893456000.0,

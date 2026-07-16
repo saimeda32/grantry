@@ -4,6 +4,30 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.5.0] - 2026-07-16
+
+### Added
+- `grantry status`: a one-glance overview of your instance, session expiry,
+  cached access, policy state, and audit count.
+- `grantry check --sandbox`: reports any ambient AWS access (credential env vars,
+  a static credentials file, or native profiles) that would let an agent go
+  around the policy gate, and exits non-zero if it finds any. Run it inside the
+  agent's environment to prove the gate is a real boundary there.
+- `~/.grantry/config.toml` for optional defaults (`ttl`, `start_url`, `region`).
+  Flags, environment variables, and a remembered instance always win over it.
+- GitHub Copilot CLI is now a supported `grantry install` target (`copilot-cli`).
+- `grantry login` warms the completion cache, so TAB works right after your first
+  login, not only after the first `ls`.
+
+### Changed
+- `grantry --help` is cleaner: the internal completion helper is hidden and the
+  command list is no longer dumped into the usage line.
+- CI actions updated off the deprecated Node 20 runtime (checkout v7, setup-uv v8).
+
+### Housekeeping
+- Added a demo to the README and a `.pre-commit-config.yaml`.
+- Removed internal planning docs from the published tree.
+
 ## [0.4.0] - 2026-07-15
 
 ### Added
@@ -68,6 +92,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.5.0]: https://github.com/saimeda32/grantry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/saimeda32/grantry/releases/tag/v0.4.0
 [0.3.0]: https://github.com/saimeda32/grantry/releases/tag/v0.3.0
 [0.2.0]: https://github.com/saimeda32/grantry/releases/tag/v0.2.0

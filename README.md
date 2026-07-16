@@ -15,6 +15,8 @@ plain file, and no secret is ever written to a log.
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
+![grantry in action](docs/demo.gif)
+
 ---
 
 ## Why grantry exists
@@ -105,6 +107,21 @@ the network. The cache refreshes whenever you run `grantry ls`. You can also ski
 typing entirely: `grantry switch` and `grantry console` with no identity open an
 interactive picker.
 
+### Optional defaults
+
+If you get tired of passing the same flags, set defaults in
+`~/.grantry/config.toml`. Every key is optional:
+
+```toml
+[defaults]
+ttl = "30m"                                   # default lifetime for run/switch/console
+start_url = "https://your-org.awsapps.com/start"  # so you can skip it on first login
+region = "us-east-1"
+```
+
+These are only fallbacks. A flag, an environment variable, or the instance grantry
+already remembered always wins.
+
 ## Commands
 
 | Command | What it does |
@@ -116,7 +133,8 @@ interactive picker.
 | `grantry console [id]` | Open the AWS console in your browser as an identity. Omit the id to pick. |
 | `grantry credential-process --identity <id>` | Emit credentials as JSON for an AWS config `credential_process` entry, so native `aws`/boto3/Terraform route through grantry. |
 | `grantry populate` | Write `~/.aws/config` profiles for your access. Adds, updates, and prunes only its own profiles. |
-| `grantry check` | Diagnose your session and access, with clear exit codes. |
+| `grantry check` | Diagnose your session and access, with clear exit codes. Add `--sandbox` to check whether an agent here has ambient AWS access that bypasses the gate. |
+| `grantry status` | A quick overview: instance, session expiry, cached access, policy, audit count. |
 | `grantry init` | Generate a working policy from your real access. |
 | `grantry audit` | Print the grant history, or write an HTML timeline with `--visualize`. |
 | `grantry graph` | Write an HTML map of what your agents can reach under the policy. |
@@ -139,7 +157,8 @@ grantry install cursor     # or a specific one
 grantry install --dry-run  # preview without writing
 ```
 
-Supported: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vscode`.
+Supported: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vscode`,
+`copilot-cli`.
 grantry is added without touching your other MCP servers, and each client gets
 its own audit label. Restart the client to load it.
 
@@ -225,7 +244,10 @@ Read this honestly before relying on grantry as a control: the policy gate only
 covers the MCP door. If an agent also has a shell and you have run
 `grantry populate`, the agent can use `aws --profile ...` directly and bypass
 the gate. For the gate to be a real boundary, run the agent with no ambient AWS
-access. And `get_credentials` returns credentials as text into the agent's
+access. Run `grantry check --sandbox` inside the agent's environment to verify
+that: it reports any credential env vars, static credentials file, or native
+profiles that would let the agent go around grantry, and exits non-zero if it
+finds any, so you can wire it into a sandbox startup check. And `get_credentials` returns credentials as text into the agent's
 context. See [SECURITY.md](SECURITY.md) for the full picture and to report a
 vulnerability.
 

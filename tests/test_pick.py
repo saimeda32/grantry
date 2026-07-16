@@ -1,14 +1,14 @@
 from grantry.pick import choose_numbered, choose_with_fzf
 
-KEYS = ["mlp-dev/AWSReadOnlyAccess", "mlp-prod/AWSAdministratorAccess"]
+KEYS = ["acme-dev/AWSReadOnlyAccess", "acme-prod/AWSAdministratorAccess"]
 
 
 def test_fzf_returns_selected_line():
     def runner(stdin_text):
-        assert "mlp-dev/AWSReadOnlyAccess" in stdin_text
-        return 0, "mlp-prod/AWSAdministratorAccess\n"
+        assert "acme-dev/AWSReadOnlyAccess" in stdin_text
+        return 0, "acme-prod/AWSAdministratorAccess\n"
 
-    assert choose_with_fzf(KEYS, runner) == "mlp-prod/AWSAdministratorAccess"
+    assert choose_with_fzf(KEYS, runner) == "acme-prod/AWSAdministratorAccess"
 
 
 def test_fzf_cancel_returns_none():
@@ -22,8 +22,8 @@ def test_fzf_rejects_line_not_in_keys():
 def test_numbered_choice_valid():
     written: list[str] = []
     chosen = choose_numbered(KEYS, read_line=lambda: "2", write=written.append)
-    assert chosen == "mlp-prod/AWSAdministratorAccess"
-    assert any("mlp-dev/AWSReadOnlyAccess" in line for line in written)
+    assert chosen == "acme-prod/AWSAdministratorAccess"
+    assert any("acme-dev/AWSReadOnlyAccess" in line for line in written)
 
 
 def test_numbered_choice_blank_cancels():

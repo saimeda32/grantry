@@ -33,14 +33,14 @@ def test_profile_block():
         "prod.ReadOnlyAccess",
         "111122223333",
         "ReadOnlyAccess",
-        "https://mlp.awsapps.com/start",
+        "https://acme.awsapps.com/start",
         "us-east-1",
         "us-west-2",
     )
     assert "[profile prod.ReadOnlyAccess]" in block
     assert "sso_account_id = 111122223333" in block
     assert "sso_role_name = ReadOnlyAccess" in block
-    assert "sso_start_url = https://mlp.awsapps.com/start" in block
+    assert "sso_start_url = https://acme.awsapps.com/start" in block
     assert "region = us-west-2" in block
     assert "grantry_managed = true" in block
 
@@ -95,7 +95,7 @@ def test_append_profiles():
 def test_safe_profile_name_sanitizes():
     from grantry.humanops import safe_profile_name
 
-    assert safe_profile_name("mlp-dev", "AWSReadOnlyAccess") == "mlp-dev.AWSReadOnlyAccess"
+    assert safe_profile_name("acme-dev", "AWSReadOnlyAccess") == "acme-dev.AWSReadOnlyAccess"
     # whitespace and special chars collapse to a single hyphen
     assert safe_profile_name("Prod Account", "Admin Access") == "Prod-Account.Admin-Access"
     assert safe_profile_name("acct (main)", "role/x") == "acct-main.role-x"

@@ -76,6 +76,17 @@ def _instance(args: argparse.Namespace) -> tuple[str, str]:
     if saved is not None:
         # Fall back to the remembered instance, letting a partial flag override.
         return start or saved.start_url, region or saved.region
+    # Last resort: defaults from ~/.grantry/config.toml, if the user set them.
+    # This only fires when nothing else is known, so it never overrides a flag,
+    # an env var, or a remembered instance.
+    from grantry.appconfig import load_config
+
+    cfg = load_config()
+    start = start or cfg.start_url
+    region = region or cfg.region
+    if start and region:
+        save_instance(start, region)
+        return start, region
     raise SystemExit(
         "No Identity Center instance known yet. Pass --start-url and --region once "
         "(or set GRANTRY_SSO_START_URL and GRANTRY_SSO_REGION); grantry will remember it."
@@ -83,6 +94,10 @@ def _instance(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from grantry.appconfig import load_config
+
+    app_cfg = load_config()
+    default_ttl = app_cfg.ttl
     parser = argparse.ArgumentParser(prog="grantry")
     parser.add_argument("-v", "--verbose", action="count", default=0)
     parser.add_argument("--start-url", default=None)
@@ -94,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     inst = argparse.ArgumentParser(add_help=False)
     inst.add_argument("--start-url", default=argparse.SUPPRESS)
     inst.add_argument("--region", default=argparse.SUPPRESS)
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
     p_login = sub.add_parser("login", parents=[inst], help="log in to Identity Center")
     p_login.add_argument(
         "--force-refresh", action="store_true", help="ignore any cached session and log in again"
@@ -116,20 +131,20 @@ def main(argv: list[str] | None = None) -> int:
     p_graph.add_argument("-o", "--out", default="grantry-access.html")
     p_run = sub.add_parser("run", parents=[inst], help="run a command as an identity")
     p_run.add_argument("identity")
-    p_run.add_argument("--ttl", default="1h")
+    p_run.add_argument("--ttl", default=default_ttl)
     p_run.add_argument("cmd", nargs=argparse.REMAINDER)
     p_switch = sub.add_parser(
         "switch", parents=[inst], help="print shell exports to adopt an identity"
     )
     p_switch.add_argument("identity", nargs="?", help="omit to pick interactively")
-    p_switch.add_argument("--ttl", default="1h")
+    p_switch.add_argument("--ttl", default=default_ttl)
     p_credproc = sub.add_parser(
         "credential-process",
         parents=[inst],
         help="emit credentials as JSON for an AWS config credential_process entry",
     )
     p_credproc.add_argument("--identity", required=True)
-    p_credproc.add_argument("--ttl", default="1h")
+    p_credproc.add_argument("--ttl", default=default_ttl)
     p_credproc.add_argument(
         "--caller",
         choices=["human", "agent"],
@@ -140,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         "console", parents=[inst], help="open the AWS console in a browser as an identity"
     )
     p_console.add_argument("identity", nargs="?", help="omit to pick interactively")
-    p_console.add_argument("--ttl", default="1h")
+    p_console.add_argument("--ttl", default=default_ttl)
     p_console.add_argument("--destination", default=None, help="a console URL to land on")
     p_console.add_argument(
         "--print", dest="print_url", action="store_true", help="print the URL instead of opening"
@@ -150,7 +165,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_pop.add_argument("--dry-run", action="store_true")
     p_pop.add_argument("--workload-region", default=None)
-    sub.add_parser("check", parents=[inst], help="diagnose configuration and access")
+    p_check = sub.add_parser("check", parents=[inst], help="diagnose configuration and access")
+    p_check.add_argument(
+        "--sandbox",
+        action="store_true",
+        help="check whether an agent here has ambient AWS access that bypasses the policy gate",
+    )
+    sub.add_parser(
+        "status", parents=[inst], help="a quick overview of your session, access, and policy"
+    )
     p_init = sub.add_parser(
         "init", parents=[inst], help="generate a starter policy from your real access"
     )
@@ -163,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     p_assign.add_argument(
         "--as", dest="as_identity", required=True, help="admin identity to crawl with"
     )
-    p_assign.add_argument("--ttl", default="1h")
+    p_assign.add_argument("--ttl", default=default_ttl)
     p_assign.add_argument("--visualize", action="store_true")
     p_assign.add_argument("-o", "--out", default="grantry-assignments.html")
     p_assign.add_argument(
@@ -188,8 +211,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_completion.add_argument("shell", choices=SHELLS)
     # Internal: feeds identity names to the completion scripts. Reads a cache, so
-    # it is instant and never touches the network. Hidden from the help listing.
-    sub.add_parser("_complete-identities", help=argparse.SUPPRESS)
+    # it is instant and never touches the network. Omitting help keeps it out of
+    # the help listing, and metavar keeps it out of the usage line.
+    sub.add_parser("_complete-identities")
 
     args = parser.parse_args(argv)
     configure_logging(args.verbose)
@@ -256,6 +280,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "uninstall":
         return _cmd_uninstall(args.clients)
 
+    # The sandbox check inspects this environment for ambient AWS access. It must
+    # work with no configured instance, since it is meant to run inside an agent's
+    # sandbox where grantry may never have been pointed anywhere.
+    if args.command == "check" and args.sandbox:
+        return _cmd_sandbox_check()
+
     start, region = _instance(args)
     broker = build_broker(start, region)
 
@@ -265,6 +295,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         session = broker.login(TerminalHandler())
         print(f"Logged in to {session.start_url}.")
+        # Warm the completion cache so TAB works right after the first login,
+        # not only after the first 'ls'. Best effort: a slow or failed listing
+        # must never turn a successful login into an error.
+        with contextlib.suppress(Exception):
+            broker.identities()
         print("The native 'aws' CLI and SDKs can now use this session too.")
         print("Run 'grantry populate' once to create matching ~/.aws/config profiles.")
         return 0
@@ -317,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "check":
         return _cmd_check(broker)
+
+    if args.command == "status":
+        return _cmd_status(broker)
 
     if args.command == "init":
         return _cmd_init(broker, args.force)
@@ -687,6 +725,125 @@ def _cmd_check(broker: Broker) -> int:
         print("Check your network and that the SSO region is correct, then try again.")
         return 203
     print(f"Access OK: {len(idents)} identities reachable.")
+    return 0
+
+
+def _cmd_sandbox_check() -> int:
+    """Report ambient AWS access an agent in this environment could use to go
+    around grantry's policy gate. Exit 0 means none was found (the gate is a real
+    boundary here); exit 211 means some was found. Meant to be run inside the
+    agent's sandbox, so it needs no session or configured instance.
+    """
+    import pathlib
+
+    findings: list[str] = []
+
+    ambient_env = [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AWS_DEFAULT_PROFILE",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+    ]
+    for name in ambient_env:
+        if os.environ.get(name):
+            findings.append(f"environment variable {name} is set")
+
+    home = pathlib.Path.home()
+    creds = pathlib.Path(
+        os.environ.get("AWS_SHARED_CREDENTIALS_FILE") or (home / ".aws" / "credentials")
+    )
+    try:
+        if creds.is_file() and creds.stat().st_size > 0:
+            findings.append(f"a static credentials file exists at {creds}")
+    except OSError:
+        pass
+
+    cfg = pathlib.Path(os.environ.get("AWS_CONFIG_FILE") or (home / ".aws" / "config"))
+    try:
+        text = cfg.read_text(encoding="utf-8") if cfg.is_file() else ""
+    except OSError:
+        text = ""
+    if "grantry_managed = true" in text:
+        findings.append(
+            f"grantry-populated profiles exist in {cfg}; an agent with a shell could "
+            "run 'aws --profile ...' directly, around the MCP gate"
+        )
+    elif "[profile" in text or "[default]" in text:
+        findings.append(f"AWS profiles in {cfg} may provide ambient access")
+
+    if not findings:
+        print("Sandbox check passed: no ambient AWS access detected.")
+        print("grantry's MCP tools (or a credential_process profile with --caller agent) are the")
+        print("only path to credentials here, so the policy gate is a real boundary.")
+        return 0
+
+    print("Sandbox check found ambient AWS access an agent could use to bypass the policy gate:")
+    for item in findings:
+        print(f"  - {item}")
+    print("")
+    print("For the gate to be a real boundary, run the agent with none of the above: no AWS_*")
+    print("credential env vars, no static credentials file, and no native profiles. Give it only")
+    print("grantry's MCP server, or a credential_process profile with --caller agent.")
+    return 211
+
+
+def _human_duration(seconds: float) -> str:
+    total = int(seconds)
+    hours, rem = divmod(total, 3600)
+    minutes = rem // 60
+    if hours and minutes:
+        return f"{hours}h {minutes}m"
+    if hours:
+        return f"{hours}h"
+    if minutes:
+        return f"{minutes}m"
+    return "under a minute"
+
+
+def _cmd_status(broker: Broker) -> int:
+    import time
+
+    from grantry import __version__
+    from grantry.idcache import read_keys
+    from grantry.instance import list_instances, load_instance
+
+    print(f"grantry {__version__}")
+
+    inst = load_instance()
+    if inst is None:
+        print("Instance:  not configured. Run 'grantry login --start-url ... --region ...'.")
+    else:
+        others = max(0, len(list_instances()) - 1)
+        extra = f", {others} other remembered" if others else ""
+        print(f"Instance:  {inst.start_url} (region {inst.region}){extra}")
+
+    session = broker.cached_session()
+    if session is None:
+        print("Session:   logged out. Run 'grantry login'.")
+    else:
+        remaining = session.expires_at - time.time()
+        if remaining <= 0:
+            print("Session:   expired. Run 'grantry login --force-refresh'.")
+        else:
+            print(f"Session:   active, expires in {_human_duration(remaining)}.")
+
+    keys = read_keys()
+    if keys:
+        print(f"Access:    {len(keys)} identities cached (from your last 'grantry ls').")
+    else:
+        print("Access:    none cached yet. Run 'grantry ls' to load your identities.")
+
+    policy = state_path("policy.yaml")
+    if policy.exists():
+        print(f"Policy:    {policy}")
+    else:
+        print("Policy:    none yet, so agents are denied by default. Run 'grantry init'.")
+
+    print(f"Audit:     {len(AuditLog().entries())} grants recorded.")
     return 0
 
 

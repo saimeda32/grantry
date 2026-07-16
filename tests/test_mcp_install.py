@@ -5,12 +5,12 @@ from grantry.mcp_install import CLIENTS, merge_server, server_entry
 
 def test_server_entry_includes_label_and_instance():
     entry = server_entry(
-        "py", ["-m", "grantry", "mcp"], "cursor", "https://mlp.awsapps.com/start", "us-east-1"
+        "py", ["-m", "grantry", "mcp"], "cursor", "https://acme.awsapps.com/start", "us-east-1"
     )
     assert entry["command"] == "py"
     assert entry["args"] == ["-m", "grantry", "mcp"]
     assert entry["env"]["GRANTRY_AGENT_LABEL"] == "cursor"
-    assert entry["env"]["GRANTRY_SSO_START_URL"] == "https://mlp.awsapps.com/start"
+    assert entry["env"]["GRANTRY_SSO_START_URL"] == "https://acme.awsapps.com/start"
     assert entry["env"]["GRANTRY_SSO_REGION"] == "us-east-1"
 
 
@@ -43,8 +43,18 @@ def test_merge_creates_root_when_absent():
 
 
 def test_registry_has_the_common_clients():
-    assert {"claude-code", "claude-desktop", "cursor", "windsurf", "vscode"} <= set(CLIENTS)
+    assert {
+        "claude-code",
+        "claude-desktop",
+        "cursor",
+        "windsurf",
+        "vscode",
+        "copilot-cli",
+    } <= set(CLIENTS)
     assert CLIENTS["vscode"].root == "servers"  # VS Code uses "servers"
+    # Copilot CLI reads a mcpServers map from ~/.copilot/mcp-config.json
+    assert CLIENTS["copilot-cli"].root == "mcpServers"
+    assert CLIENTS["copilot-cli"].path.endswith(".copilot/mcp-config.json")
 
 
 def test_install_command_writes_and_preserves(tmp_path, monkeypatch):
