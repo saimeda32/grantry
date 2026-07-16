@@ -78,8 +78,13 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("login")
     sub.add_parser("ls")
-    sub.add_parser("audit")
+    p_audit = sub.add_parser("audit", help="print or visualize the grant history")
+    p_audit.add_argument("--visualize", action="store_true", help="write an HTML timeline instead")
+    p_audit.add_argument("-o", "--out", default="grantry-audit.html")
     sub.add_parser("mcp")
+    p_graph = sub.add_parser("graph", help="write an HTML map of what agents can reach")
+    p_graph.add_argument("--caller", choices=["agent", "human"], default="agent")
+    p_graph.add_argument("-o", "--out", default="grantry-access.html")
     p_run = sub.add_parser("run", help="run a command as an identity")
     p_run.add_argument("identity")
     p_run.add_argument("--ttl", default="1h")
@@ -105,7 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(args.verbose)
 
     if args.command == "audit":
-        for e in AuditLog().entries():
+        entries = AuditLog().entries()
+        if args.visualize:
+            from grantry.render import render_audit
+
+            html = render_audit(entries, _iso_now()[:10])
+            with open(args.out, "w", encoding="utf-8") as fh:
+                fh.write(html)
+            print(f"Wrote audit timeline ({len(entries)} grants) to {args.out}")
+            return 0
+        for e in entries:
             verdict = "allow" if e["allowed"] else "deny"
             print(f"{e['at']} {e['caller']} {e['identity']} {verdict} ({e['reason']})")
         return 0
@@ -151,7 +165,32 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(broker, args.force)
 
+    if args.command == "graph":
+        return _cmd_graph(broker, args.caller, args.out)
+
     return 2
+
+
+def _cmd_graph(broker: Broker, caller: str, out: str) -> int:
+    from grantry.graphdata import access_surface
+    from grantry.render import render_access_surface
+
+    try:
+        idents = broker.identities()
+    except NoSessionError:
+        print("No active session. Run 'grantry login' first.")
+        return 1
+    policy = Policy.load(state_path("policy.yaml"))
+    surface = access_surface(idents, policy, caller)
+    html = render_access_surface(surface, _iso_now()[:10])
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(html)
+    print(
+        f"Wrote access surface for {caller}s to {out} "
+        f"({surface.allowed_count} of {len(surface.cells)} identities allowed, "
+        f"{surface.reachable_accounts} accounts reachable)."
+    )
+    return 0
 
 
 def _cmd_init(broker: Broker, force: bool) -> int:

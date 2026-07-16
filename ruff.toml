@@ -3,3 +3,7 @@ line-length = 100
 
 [lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[lint.per-file-ignores]
+# render.py builds HTML; long inline markup lines are clearer unwrapped.
+"src/grantry/render.py" = ["E501"]
