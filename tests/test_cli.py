@@ -352,6 +352,25 @@ def test_populate_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
     assert cfg.read_text() == before  # dry run changed nothing
 
 
+def test_file_link_plain_when_piped():
+    # Under pytest stdout is not a TTY, so the path stays plain for clean scripts.
+    from grantry.cli import _file_link
+
+    assert _file_link("out.html") == "out.html"
+
+
+def test_file_link_green_and_clickable_on_tty(monkeypatch):
+    import sys as _sys
+
+    from grantry.cli import _file_link
+
+    monkeypatch.setattr(_sys.stdout, "isatty", lambda: True)
+    out = _file_link("out.html")
+    assert "\033]8;;file://" in out  # OSC 8 hyperlink to the file
+    assert "\033[32m" in out  # green
+    assert out.endswith("\033]8;;\033\\")  # closes the hyperlink
+
+
 def test_version_command(capsys):
     rc = main(["version"])
     out = capsys.readouterr().out

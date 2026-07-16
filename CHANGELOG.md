@@ -4,6 +4,16 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.2] - 2026-07-16
+
+### Changed
+- The "Wrote ... to <file>" messages (`admin assignments --visualize`, `graph`,
+  `audit --visualize`) now print a green, clickable link to the file when writing
+  to a terminal, and a plain path when piped.
+- The numbered identity picker now draws in the terminal's alternate screen, so
+  the whole list disappears once you choose instead of leaving dozens of lines
+  scrolled up behind you.
+
 ## [0.8.1] - 2026-07-16
 
 ### Added
@@ -148,6 +158,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.8.2]: https://github.com/saimeda32/grantry/releases/tag/v0.8.2
 [0.8.1]: https://github.com/saimeda32/grantry/releases/tag/v0.8.1
 [0.8.0]: https://github.com/saimeda32/grantry/releases/tag/v0.8.0
 [0.7.0]: https://github.com/saimeda32/grantry/releases/tag/v0.7.0

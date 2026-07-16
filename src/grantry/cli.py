@@ -38,6 +38,21 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _file_link(path: str) -> str:
+    """A green, clickable (OSC 8 hyperlink) absolute path when writing to a
+    terminal, or a plain path when the output is piped, so scripts stay clean.
+    """
+    import pathlib
+
+    abspath = os.path.abspath(path)
+    if not sys.stdout.isatty():
+        return path
+    uri = pathlib.Path(abspath).as_uri()
+    # OSC 8 hyperlink wrapping green text; falls back to a selectable absolute
+    # path in terminals that ignore the hyperlink escape.
+    return f"\033]8;;{uri}\033\\\033[32m{abspath}\033[0m\033]8;;\033\\"
+
+
 class TerminalHandler(InteractionHandler):
     def on_verification(self, verification_uri: str, user_code: str) -> None:
         import webbrowser
@@ -327,7 +342,7 @@ def _run(argv: list[str] | None = None) -> int:
             html = render_audit(entries, _iso_now()[:10])
             with open(args.out, "w", encoding="utf-8") as fh:
                 fh.write(html)
-            print(f"Wrote audit timeline ({len(entries)} grants) to {args.out}")
+            print(f"Wrote audit timeline ({len(entries)} grants) to {_file_link(args.out)}")
             return 0
         for e in entries:
             verdict = "allow" if e["allowed"] else "deny"
@@ -538,7 +553,7 @@ def _cmd_admin_assignments(
         html = render_assignments(assignments, _iso_now()[:10])
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(html)
-        print(f"Wrote {len(assignments)} assignments to {out}")
+        print(f"Wrote {len(assignments)} assignments to {_file_link(out)}")
         return 0
 
     print("principal_type,principal_name,permission_set,account_id,account_name")
@@ -565,7 +580,7 @@ def _cmd_graph(broker: Broker, caller: str, out: str) -> int:
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(html)
     print(
-        f"Wrote access surface for {caller}s to {out} "
+        f"Wrote access surface for {caller}s to {_file_link(out)} "
         f"({surface.allowed_count} of {len(surface.cells)} identities allowed, "
         f"{surface.reachable_accounts} accounts reachable)."
     )

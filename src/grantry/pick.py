@@ -69,4 +69,15 @@ def choose(keys: list[str]) -> str | None:
         return choose_with_fzf(keys)
     if not sys.stdin.isatty():
         return None  # no terminal to prompt on; caller must pass an identity
-    return choose_numbered(keys, input)
+    # Draw the numbered menu in the terminal's alternate screen so the whole list
+    # disappears once you pick, instead of leaving dozens of lines scrolled up.
+    use_alt = sys.stderr.isatty()
+    if use_alt:
+        sys.stderr.write("\033[?1049h\033[H")
+        sys.stderr.flush()
+    try:
+        return choose_numbered(keys, input)
+    finally:
+        if use_alt:
+            sys.stderr.write("\033[?1049l")
+            sys.stderr.flush()

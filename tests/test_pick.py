@@ -1,4 +1,4 @@
-from grantry.pick import choose_numbered, choose_with_fzf
+from grantry.pick import choose, choose_numbered, choose_with_fzf
 
 KEYS = ["acme-dev/AWSReadOnlyAccess", "acme-prod/AWSAdministratorAccess"]
 
@@ -32,3 +32,21 @@ def test_numbered_choice_blank_cancels():
 
 def test_numbered_choice_out_of_range():
     assert choose_numbered(KEYS, read_line=lambda: "9", write=lambda s: None) is None
+
+
+def test_choose_wraps_numbered_menu_in_alternate_screen(monkeypatch):
+    import sys
+
+    writes: list[str] = []
+    monkeypatch.setattr("grantry.pick.shutil.which", lambda _x: None)  # no fzf -> numbered
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stderr, "write", writes.append)
+    monkeypatch.setattr(sys.stderr, "flush", lambda: None)
+    monkeypatch.setattr("builtins.input", lambda: "1")
+
+    result = choose(KEYS)
+    joined = "".join(writes)
+    assert result == "acme-dev/AWSReadOnlyAccess"
+    assert "\033[?1049h" in joined  # entered the alternate screen
+    assert "\033[?1049l" in joined  # and restored it (menu disappears)
