@@ -85,6 +85,26 @@ credentials from grantry. This is also how you make grantry a real boundary for
 a sandboxed agent: give the sandbox only a `credential_process` profile with
 `--caller agent`, and the agent cannot reach anything the policy denies.
 
+### Tab-complete your identities
+
+You do not have to type `account/role` by hand. Turn on shell completion once and
+TAB fills in your real identities for `run`, `switch`, `console`, and
+`credential-process`:
+
+```bash
+# bash: add to ~/.bashrc
+source <(grantry completion bash)
+# zsh: add to ~/.zshrc
+source <(grantry completion zsh)
+# fish: add to ~/.config/fish/config.fish
+grantry completion fish | source
+```
+
+Completion reads a local cache of your identities, so pressing TAB never waits on
+the network. The cache refreshes whenever you run `grantry ls`. You can also skip
+typing entirely: `grantry switch` and `grantry console` with no identity open an
+interactive picker.
+
 ## Commands
 
 | Command | What it does |
@@ -106,6 +126,7 @@ a sandboxed agent: give the sandbox only a `credential_process` profile with
 | `grantry logout` | Clear the saved session for the current instance. |
 | `grantry instances` / `grantry use <name>` | List remembered orgs, or switch between them. |
 | `grantry install` / `grantry uninstall` | Add or remove grantry from an AI client's MCP config. |
+| `grantry completion <shell>` | Print a shell completion script for bash, zsh, or fish. |
 | `grantry version` | Print the version. |
 
 ## Use it with your AI agents
@@ -217,7 +238,9 @@ surface. Team mode (shared, signed policy) comes after that.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). In short: fork, branch, write a test,
-keep `ruff`, `mypy`, and `pytest` green, open a pull request.
+keep `ruff`, `mypy`, and `pytest` green, open a pull request. By taking part you
+agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Notable changes are recorded
+in the [changelog](CHANGELOG.md).
 
 ## License
 

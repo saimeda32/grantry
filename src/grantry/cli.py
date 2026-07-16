@@ -12,6 +12,7 @@ from typing import Any
 
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
+from grantry.completion import SHELLS
 from grantry.config import state_path
 from grantry.humanops import (
     append_profiles,
@@ -182,6 +183,13 @@ def main(argv: list[str] | None = None) -> int:
     p_uninstall.add_argument(
         "clients", nargs="*", help="claude-code, cursor, ... (blank = all found)"
     )
+    p_completion = sub.add_parser(
+        "completion", help="print a shell completion script (bash, zsh, or fish)"
+    )
+    p_completion.add_argument("shell", choices=SHELLS)
+    # Internal: feeds identity names to the completion scripts. Reads a cache, so
+    # it is instant and never touches the network. Hidden from the help listing.
+    sub.add_parser("_complete-identities", help=argparse.SUPPRESS)
 
     args = parser.parse_args(argv)
     configure_logging(args.verbose)
@@ -190,6 +198,19 @@ def main(argv: list[str] | None = None) -> int:
         from grantry import __version__
 
         print(f"grantry {__version__}")
+        return 0
+
+    if args.command == "completion":
+        from grantry.completion import completion_script
+
+        print(completion_script(args.shell), end="")
+        return 0
+
+    if args.command == "_complete-identities":
+        from grantry.idcache import read_keys
+
+        for key in read_keys():
+            print(key)
         return 0
 
     if args.command == "instances":

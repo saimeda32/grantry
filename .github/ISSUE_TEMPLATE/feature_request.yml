@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea or improvement for grantry.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that grantry makes hard today?
+      placeholder: When I ... I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The command, flag, or behavior you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Other tools or workarounds, and why they fall short.
+    validations:
+      required: false

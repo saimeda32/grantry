@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from grantry.audit import AuditLog
 from grantry.config import state_path
+from grantry.idcache import write_cache as write_id_cache
 from grantry.identity import Identity
 from grantry.policy import Decision, Policy
 from grantry.providers.base import (
@@ -208,7 +209,9 @@ class Broker:
         session = self.cached_session()
         if session is None:
             raise NoSessionError("no active session; run login first")
-        return self._provider.list_identities(session)
+        idents = self._provider.list_identities(session)
+        write_id_cache(idents)
+        return idents
 
     def would_allow(self, ident_key: str, caller: str) -> Decision:
         """Evaluate policy for an identity key without minting. Requires a session."""

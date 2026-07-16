@@ -165,6 +165,32 @@ def test_version_command(capsys):
     assert out.startswith("grantry ")
 
 
+def test_completion_command(capsys):
+    rc = main(["completion", "bash"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "complete -F _grantry_complete grantry" in out
+
+
+def test_complete_identities_reads_cache(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    from grantry.idcache import write_cache
+    from grantry.identity import Identity
+
+    write_cache([Identity("1", "acme-dev", "AWSReadOnlyAccess")])
+    rc = main(["_complete-identities"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "acme-dev/AWSReadOnlyAccess" in out
+
+
+def test_complete_identities_empty_without_cache(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    rc = main(["_complete-identities"])
+    assert rc == 0
+    assert capsys.readouterr().out == ""
+
+
 def test_instances_and_use(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     from grantry.instance import save_instance
