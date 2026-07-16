@@ -126,11 +126,13 @@ def _run(argv: list[str] | None = None) -> int:
     parser.add_argument("--region", default=None)
     # A shared parent so the instance flags also work AFTER the subcommand
     # (grantry login --start-url ...), which is the order people naturally type.
-    # SUPPRESS means "not given here" does not clobber a value given before the
-    # subcommand, so both orders work.
+    # SUPPRESS on the default means "not given here" does not clobber a value given
+    # before the subcommand, so both orders work. help=SUPPRESS keeps these off
+    # every subcommand's help: grantry remembers the instance after the first
+    # login, so there is no reason to advertise them on ls, admin, run, and so on.
     inst = argparse.ArgumentParser(add_help=False)
-    inst.add_argument("--start-url", default=argparse.SUPPRESS)
-    inst.add_argument("--region", default=argparse.SUPPRESS)
+    inst.add_argument("--start-url", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    inst.add_argument("--region", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")
     p_login = sub.add_parser("login", parents=[inst], help="log in to Identity Center")
     p_login.add_argument(
@@ -211,7 +213,10 @@ def _run(argv: list[str] | None = None) -> int:
     admin_sub = p_admin.add_subparsers(dest="admin_command", required=True)
     p_assign = admin_sub.add_parser("assignments", help="crawl who-has-what across the org")
     p_assign.add_argument(
-        "--as", dest="as_identity", required=True, help="admin identity to crawl with"
+        "--as",
+        dest="as_identity",
+        default=None,
+        help="admin identity to crawl with, as account/role; omit to pick interactively",
     )
     p_assign.add_argument("--ttl", default=default_ttl)
     p_assign.add_argument("--visualize", action="store_true")
@@ -418,7 +423,7 @@ def _run(argv: list[str] | None = None) -> int:
 def _cmd_admin_assignments(
     broker: Broker,
     region: str,
-    as_identity: str,
+    as_identity: str | None,
     ttl: str,
     visualize: bool,
     out: str,
@@ -429,7 +434,10 @@ def _cmd_admin_assignments(
 
     from grantry.admin import crawl_assignments
 
-    code, creds = _human_credentials(broker, as_identity, ttl)
+    ident = _resolve_identity(broker, as_identity)
+    if ident is None:
+        return 1
+    code, creds = _human_credentials(broker, ident, ttl)
     if code != 0 or creds is None:
         return code
     from grantry.providers.base import Credentials
