@@ -1,4 +1,3 @@
-
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
 from grantry.identity import Identity

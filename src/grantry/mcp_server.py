@@ -5,10 +5,58 @@ MCP transport.
 
 from __future__ import annotations
 
+import contextlib
+import shutil
+import subprocess
+import sys
+from collections.abc import Callable
+
 from mcp.server.fastmcp import FastMCP
 
 from grantry.broker import Broker, GrantResult, NoSessionError
+from grantry.providers.base import InteractionHandler
 from grantry.ttl import parse_ttl
+
+Notifier = Callable[[str, str], None]
+
+
+def _desktop_notify(title: str, message: str) -> None:
+    # Best-effort desktop notification so a human sees the login prompt even
+    # though the MCP server has no terminal of its own. Silent if unavailable.
+    cmd: list[str] | None = None
+    if sys.platform == "darwin" and shutil.which("osascript"):
+        cmd = ["osascript", "-e", f'display notification "{message}" with title "{title}"']
+    elif shutil.which("notify-send"):
+        cmd = ["notify-send", title, message]
+    if cmd is not None:
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(cmd, check=False, timeout=5)
+
+
+class _AgentLoginHandler(InteractionHandler):
+    """Surfaces the device-flow prompt to the human via notification and stderr,
+    then returns immediately; the provider's poll loop waits for browser
+    approval, so nothing blocks on a stdin no agent can reach.
+    """
+
+    def __init__(self, notify: Notifier) -> None:
+        self._notify = notify
+
+    def on_verification(self, verification_uri: str, user_code: str) -> None:
+        msg = f"Open {verification_uri} and enter code {user_code}"
+        self._notify("grantry login required", msg)
+        print(f"grantry: {msg}", file=sys.stderr, flush=True)
+
+    def wait(self) -> None:
+        return None
+
+
+def handle_request_login(broker: Broker, notify: Notifier = _desktop_notify) -> str:
+    try:
+        session = broker.login(_AgentLoginHandler(notify))
+    except Exception as e:  # report any login failure back to the agent
+        return f"Login could not be completed: {e}"
+    return f"Login complete for {session.start_url}. Retry your request."
 
 
 def _render_credentials(result: GrantResult) -> str:
@@ -82,5 +130,11 @@ def build_mcp(broker: Broker, caller_label: str = "agent") -> FastMCP:
             return "No active session."
         verdict = "ALLOWED" if decision.allowed else "DENIED"
         return f"{verdict}: {decision.reason}"
+
+    @mcp.tool()
+    def request_login() -> str:
+        """Ask the human to log in when no session is active. Notifies them and
+        waits for browser approval, then resolves so the agent can retry."""
+        return handle_request_login(broker)
 
     return mcp
