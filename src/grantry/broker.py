@@ -93,7 +93,17 @@ class Broker:
             return Decision(False, f"unknown identity {ident_key!r}", None, 0)
         return self._policy.evaluate(ident, 900, caller)
 
-    def grant(self, ident_key: str, requested_ttl: int, caller: str) -> GrantResult:
+    def grant(
+        self,
+        ident_key: str,
+        requested_ttl: int,
+        caller: str,
+        caller_label: str | None = None,
+    ) -> GrantResult:
+        # caller is the policy CLASS ("agent" or "human") that selects the rule
+        # section. caller_label is WHO specifically asked (e.g. "claude-code"),
+        # recorded in the audit. It defaults to the class when not given.
+        label = caller_label or caller
         session = self.cached_session()
         if session is None:
             raise NoSessionError("no active session; run login first")
@@ -101,10 +111,10 @@ class Broker:
         if ident is None:
             unknown = Identity("unknown", *_split_key(ident_key))
             decision = Decision(False, f"unknown identity {ident_key!r}", None, 0)
-            self._audit.record(caller, unknown, decision, at=self._clock_iso())
+            self._audit.record(label, unknown, decision, at=self._clock_iso())
             return GrantResult(None, decision)
         decision = self._policy.evaluate(ident, requested_ttl, caller)
-        self._audit.record(caller, ident, decision, at=self._clock_iso())
+        self._audit.record(label, ident, decision, at=self._clock_iso())
         if not decision.allowed:
             return GrantResult(None, decision)
         creds = self._provider.mint(session, ident, decision.capped_ttl)

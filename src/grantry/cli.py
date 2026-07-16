@@ -98,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "mcp":
-        build_mcp(broker).run()
+        label = os.environ.get("GRANTRY_AGENT_LABEL", "agent")
+        build_mcp(broker, caller_label=label).run()
         return 0
 
     return 2

@@ -26,13 +26,15 @@ def _render_denied(result: GrantResult) -> str:
     return f"Denied: {result.decision.reason}. No credentials were issued."
 
 
-def handle_get_credentials(broker: Broker, identity: str, ttl: str) -> str:
+def handle_get_credentials(
+    broker: Broker, identity: str, ttl: str, caller_label: str = "agent"
+) -> str:
     try:
         seconds = parse_ttl(ttl)
     except ValueError as e:
         return f"Invalid ttl: {e}"
     try:
-        result = broker.grant(identity, seconds, caller="agent")
+        result = broker.grant(identity, seconds, caller="agent", caller_label=caller_label)
     except NoSessionError:
         return "No active AWS session. Ask a human to run 'grantry login' or call request_login."
     if result.credentials is None:
@@ -40,7 +42,10 @@ def handle_get_credentials(broker: Broker, identity: str, ttl: str) -> str:
     return _render_credentials(result)
 
 
-def build_mcp(broker: Broker) -> FastMCP:
+def build_mcp(broker: Broker, caller_label: str = "agent") -> FastMCP:
+    # caller_label identifies WHICH agent this server serves, recorded in the
+    # audit log. Each agent sets it via GRANTRY_AGENT_LABEL in its MCP config,
+    # so "who requested credentials" is answerable per agent, not just "agent".
     mcp = FastMCP("grantry")
 
     @mcp.tool()
@@ -63,7 +68,7 @@ def build_mcp(broker: Broker) -> FastMCP:
     @mcp.tool()
     def get_credentials(identity: str, ttl: str = "15m") -> str:
         """Mint short-lived AWS credentials for an identity, subject to policy."""
-        return handle_get_credentials(broker, identity, ttl)
+        return handle_get_credentials(broker, identity, ttl, caller_label=caller_label)
 
     @mcp.tool()
     def check_access(identity: str) -> str:

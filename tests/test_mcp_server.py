@@ -89,3 +89,13 @@ def test_get_credentials_tool_deny(tmp_path, monkeypatch):
     out = handle_get_credentials(b, "prod/AdminAccess", "15m")
     assert "AWS_ACCESS_KEY_ID" not in out
     assert "denied" in out.lower()
+
+
+def test_caller_label_recorded_in_audit(tmp_path, monkeypatch):
+    b = broker(tmp_path, monkeypatch)
+    handle_get_credentials(b, "prod/ReadOnlyAccess", "15m", caller_label="claude-code")
+    entries = AuditLog().entries()
+    assert entries[-1]["caller"] == "claude-code"
+    # policy still evaluated as the agent class (deny of AdminAccess still applies)
+    handle_get_credentials(b, "prod/AdminAccess", "15m", caller_label="claude-code")
+    assert AuditLog().entries()[-1]["allowed"] is False
