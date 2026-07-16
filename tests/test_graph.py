@@ -59,10 +59,20 @@ def test_render_escapes_names(tmp_path):
 
 def test_render_audit_self_contained_and_counts():
     entries = [
-        {"at": "t1", "caller": "claude-code", "identity": "mlp-dev/AWSReadOnlyAccess",
-         "allowed": True, "reason": "ok"},
-        {"at": "t2", "caller": "claude-code", "identity": "mlp-prod/AWSAdministratorAccess",
-         "allowed": False, "reason": "denied"},
+        {
+            "at": "t1",
+            "caller": "claude-code",
+            "identity": "mlp-dev/AWSReadOnlyAccess",
+            "allowed": True,
+            "reason": "ok",
+        },
+        {
+            "at": "t2",
+            "caller": "claude-code",
+            "identity": "mlp-prod/AWSAdministratorAccess",
+            "allowed": False,
+            "reason": "denied",
+        },
     ]
     html = render_audit(entries, "2026-07-16")
     assert "grants logged" in html

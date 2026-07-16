@@ -90,3 +90,14 @@ def test_append_profiles():
     assert "[profile a]" in out
     assert "[profile b]" in out
     assert out.endswith("\n")
+
+
+def test_safe_profile_name_sanitizes():
+    from grantry.humanops import safe_profile_name
+
+    assert safe_profile_name("mlp-dev", "AWSReadOnlyAccess") == "mlp-dev.AWSReadOnlyAccess"
+    # whitespace and special chars collapse to a single hyphen
+    assert safe_profile_name("Prod Account", "Admin Access") == "Prod-Account.Admin-Access"
+    assert safe_profile_name("acct (main)", "role/x") == "acct-main.role-x"
+    # never produces an empty side
+    assert safe_profile_name("  ", "  ") == "account.role"

@@ -5,12 +5,15 @@ mints without an allow decision.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from grantry.audit import AuditLog
+from grantry.config import state_path
 from grantry.identity import Identity
 from grantry.policy import Decision, Policy
 from grantry.providers.base import Credentials, InteractionHandler, Provider, Session
@@ -26,6 +29,33 @@ _ADVISORY_MARGIN = 60
 
 class NoSessionError(Exception):
     pass
+
+
+@contextlib.contextmanager
+def _refresh_lock(path: str, timeout: float = 10.0) -> Iterator[None]:
+    """A tiny cross-platform advisory lock: create the lock file exclusively,
+    spin briefly if another process holds it, and always remove it. A stale lock
+    older than the timeout is broken so a crashed process cannot wedge refresh.
+    """
+    start = time.time()
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            os.close(fd)
+            break
+        except FileExistsError:
+            with contextlib.suppress(OSError):
+                if time.time() - os.path.getmtime(path) > timeout:
+                    os.unlink(path)
+                    continue
+            if time.time() - start > timeout:
+                break  # give up waiting; proceed without the lock rather than hang
+            time.sleep(0.1)
+    try:
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
 
 
 @dataclass(frozen=True)
@@ -83,6 +113,17 @@ class Broker:
             ),
         )
 
+    def logout(self) -> bool:
+        """Forget the current instance's session: delete the keychain token.
+        Returns True if a session was present. The provider-side AWS CLI cache
+        is cleared by the caller via the on_session sink's counterpart.
+        """
+        name = token_name(self._start_url())
+        had = self._secrets.get(name) is not None
+        if had:
+            self._secrets.delete(name)
+        return had
+
     def cached_session(self) -> Session | None:
         raw = self._secrets.get(token_name(self._start_url()))
         if not raw:
@@ -100,7 +141,15 @@ class Broker:
         if session.expires_at > self._now():
             return session
         # Expired: renew silently if we have a refresh token, else require login.
-        if session.refresh_token:
+        if not session.refresh_token:
+            return None
+        # Multiple agents share one token. Serialize refresh with a lock so two
+        # processes do not both spend the rotating refresh token; the loser
+        # re-reads the token the winner just persisted.
+        with _refresh_lock(self._lock_path()):
+            latest = self._load_raw()
+            if latest is not None and latest.expires_at > self._now():
+                return latest
             try:
                 renewed = self._provider.refresh(session)
             except Exception:
@@ -109,7 +158,27 @@ class Broker:
             if self._on_session:
                 self._on_session(renewed)
             return renewed
-        return None
+
+    def _lock_path(self) -> str:
+        import hashlib
+
+        digest = hashlib.sha1(self._start_url().encode()).hexdigest()[:16]
+        return str(state_path(f"refresh-{digest}.lock"))
+
+    def _load_raw(self) -> Session | None:
+        raw = self._secrets.get(token_name(self._start_url()))
+        if not raw:
+            return None
+        data = json.loads(raw)
+        return Session(
+            start_url=data["start_url"],
+            region=data["region"],
+            access_token=data["access_token"],
+            expires_at=data["expires_at"],
+            refresh_token=data.get("refresh_token"),
+            client_id=data.get("client_id"),
+            client_secret=data.get("client_secret"),
+        )
 
     def identities(self) -> list[Identity]:
         session = self.cached_session()

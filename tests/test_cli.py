@@ -156,3 +156,44 @@ def test_populate_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert "+ prod.ReadOnlyAccess" in out
     assert cfg.read_text() == before  # dry run changed nothing
+
+
+def test_version_command(capsys):
+    rc = main(["version"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out.startswith("grantry ")
+
+
+def test_instances_and_use(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    from grantry.instance import save_instance
+
+    save_instance("https://alpha.awsapps.com/start", "us-east-1")
+    save_instance("https://beta.awsapps.com/start", "us-west-2")
+    assert main(["instances"]) == 0
+    out = capsys.readouterr().out
+    assert "alpha" in out and "beta" in out
+    assert "* beta" in out  # beta is current (saved last)
+    assert main(["use", "alpha"]) == 0
+    assert main(["instances"]) == 0
+    assert "* alpha" in capsys.readouterr().out
+
+
+def test_uninstall_removes_grantry(tmp_path, monkeypatch):
+    import json
+
+    from grantry.cli import _cmd_uninstall
+    from grantry.mcp_install import CLIENTS
+
+    cfg = tmp_path / "mcp.json"
+    cfg.write_text(
+        json.dumps({"mcpServers": {"grantry": {"command": "x"}, "other": {"command": "y"}}})
+    )
+    monkeypatch.setitem(
+        CLIENTS, "cursor", CLIENTS["cursor"].__class__("cursor", "Cursor", str(cfg), "mcpServers")
+    )
+    assert _cmd_uninstall(["cursor"]) == 0
+    written = json.loads(cfg.read_text())
+    assert "grantry" not in written["mcpServers"]
+    assert "other" in written["mcpServers"]

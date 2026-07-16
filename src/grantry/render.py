@@ -87,10 +87,7 @@ def render_access_surface(surface: AccessSurface, generated_on: str) -> str:
                 cells.append(f'<td class="cell deny" title="{_esc(cell.reason)}">deny</td>')
         rows.append(f"<tr>{''.join(cells)}</tr>")
 
-    body = (
-        f"<thead><tr><th>account \\ role</th>{head}</tr></thead>"
-        f"<tbody>{''.join(rows)}</tbody>"
-    )
+    body = f"<thead><tr><th>account \\ role</th>{head}</tr></thead><tbody>{''.join(rows)}</tbody>"
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -22,9 +22,7 @@ def scaffold_policy(identities: list[Identity], generated_on: str) -> str:
 
     readonly_roles = [r for r in roles if _READONLY in r.lower()]
     admin_roles = [r for r in roles if _ADMIN in r.lower()]
-    sensitive_accounts = [
-        a for a in accounts if any(s in a.lower() for s in _SENSITIVE_ACCOUNTS)
-    ]
+    sensitive_accounts = [a for a in accounts if any(s in a.lower() for s in _SENSITIVE_ACCOUNTS)]
 
     lines: list[str] = []
     lines.append(f"# grantry policy, generated from your access on {generated_on}.")

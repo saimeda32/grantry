@@ -167,3 +167,44 @@ def test_expired_session_auto_refreshes(tmp_path, monkeypatch):
     assert s is not None
     assert s.access_token == "tok2"  # the refreshed token
     assert s.refresh_token == "rt2"
+
+
+def test_logout_clears_token(tmp_path, monkeypatch):
+    broker = build(tmp_path, monkeypatch)
+    broker.login(H())
+    assert broker.cached_session() is not None
+    assert broker.logout() is True
+    assert broker.cached_session() is None
+    # logging out again reports nothing to clear
+    assert broker.logout() is False
+
+
+def test_refresh_lock_reuses_winner_token(tmp_path, monkeypatch):
+    # After expiry, if the persisted token was already refreshed by another
+    # process (its expiry now in the future), cached_session returns that one
+    # without calling refresh again.
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    (tmp_path / "policy.yaml").write_text(POLICY)
+    clock = {"n": 1000.0}
+
+    class CountingProvider(FakeProvider):
+        refresh_count = 0
+
+        def refresh(self, session):
+            self.refresh_count += 1
+            return super().refresh(session)
+
+    provider = CountingProvider()
+    broker = Broker(
+        provider=provider,
+        policy=Policy.load(tmp_path / "policy.yaml"),
+        audit=AuditLog(),
+        secrets=SecretStore(),
+        now=lambda: clock["n"],
+        clock_iso=lambda: "t",
+    )
+    broker.login(H())
+    clock["n"] = 1000.0 + 3600 + 1
+    s = broker.cached_session()
+    assert s is not None and s.access_token == "tok2"
+    assert provider.refresh_count == 1

@@ -94,7 +94,7 @@ def test_render_assignments_is_interactive_graph():
     assert "const DATA = [" in html
     # self-contained: no external scripts, styles, imports, or fetches. (The SVG
     # xmlns namespace URL is not a network request, so we ban the request forms.)
-    for banned in ("<script src", "<link ", "@import", "fetch(", "https://cdn", "src=\"http"):
+    for banned in ("<script src", "<link ", "@import", "fetch(", "https://cdn", 'src="http'):
         assert banned not in html
 
 

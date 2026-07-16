@@ -78,3 +78,15 @@ def merge_server(
     servers[name] = entry
     result[root] = servers
     return result
+
+
+def remove_server(config: dict[str, Any], root: str, name: str) -> tuple[dict[str, Any], bool]:
+    """Return a new config with the named server removed under the root key, plus
+    whether it was present. Other servers and top-level keys are untouched.
+    """
+    result = dict(config)
+    servers = dict(result.get(root) or {})
+    present = name in servers
+    servers.pop(name, None)
+    result[root] = servers
+    return result, present

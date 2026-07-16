@@ -91,3 +91,16 @@ def test_install_unknown_client_errors(tmp_path, monkeypatch):
 
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     assert _cmd_install(["nope"], dry_run=False) == 2
+
+
+def test_remove_server():
+    from grantry.mcp_install import remove_server
+
+    config = {"mcpServers": {"grantry": {"command": "x"}, "other": {"command": "y"}}}
+    updated, present = remove_server(config, "mcpServers", "grantry")
+    assert present is True
+    assert "grantry" not in updated["mcpServers"]
+    assert updated["mcpServers"]["other"] == {"command": "y"}
+    # removing when absent reports False
+    _, present2 = remove_server({"mcpServers": {}}, "mcpServers", "grantry")
+    assert present2 is False

@@ -20,6 +20,7 @@ from grantry.humanops import (
     parse_profiles,
     profile_block,
     reconcile,
+    safe_profile_name,
     strip_profiles,
 )
 from grantry.instance import load_instance, save_instance
@@ -86,7 +87,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-url", default=None)
     parser.add_argument("--region", default=None)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("login")
+    p_login = sub.add_parser("login", help="log in to Identity Center")
+    p_login.add_argument(
+        "--force-refresh", action="store_true", help="ignore any cached session and log in again"
+    )
+    sub.add_parser("logout", help="clear the saved session for the current instance")
+    sub.add_parser("version", help="print the grantry version")
+    sub.add_parser("instances", help="list remembered Identity Center instances")
+    p_use = sub.add_parser("use", help="switch the current instance by name or prefix")
+    p_use.add_argument("name")
     sub.add_parser("ls")
     p_audit = sub.add_parser("audit", help="print or visualize the grant history")
     p_audit.add_argument("--visualize", action="store_true", help="write an HTML timeline instead")
@@ -124,9 +133,41 @@ def main(argv: list[str] | None = None) -> int:
         "clients", nargs="*", help="claude-code, cursor, vscode, ... (blank = all found)"
     )
     p_install.add_argument("--dry-run", action="store_true")
+    p_uninstall = sub.add_parser("uninstall", help="remove grantry from an AI client's MCP config")
+    p_uninstall.add_argument(
+        "clients", nargs="*", help="claude-code, cursor, ... (blank = all found)"
+    )
 
     args = parser.parse_args(argv)
     configure_logging(args.verbose)
+
+    if args.command == "version":
+        from grantry import __version__
+
+        print(f"grantry {__version__}")
+        return 0
+
+    if args.command == "instances":
+        from grantry.instance import list_instances
+
+        rows = list_instances()
+        if not rows:
+            print("No instances remembered yet. Run 'grantry login' first.")
+            return 1
+        for name, cfg, is_current in rows:
+            marker = "*" if is_current else " "
+            print(f"{marker} {name}  {cfg.start_url}  ({cfg.region})")
+        return 0
+
+    if args.command == "use":
+        from grantry.instance import use_instance
+
+        chosen = use_instance(args.name)
+        if chosen is None:
+            print(f"No single instance matches {args.name!r}. See 'grantry instances'.")
+            return 1
+        print(f"Now using {chosen.start_url} ({chosen.region}).")
+        return 0
 
     if args.command == "audit":
         entries = AuditLog().entries()
@@ -146,14 +187,30 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "install":
         return _cmd_install(args.clients, args.dry_run)
 
+    if args.command == "uninstall":
+        return _cmd_uninstall(args.clients)
+
     start, region = _instance(args)
     broker = build_broker(start, region)
 
     if args.command == "login":
+        if not args.force_refresh and broker.cached_session() is not None:
+            print("Already logged in. Use --force-refresh to log in again.")
+            return 0
         session = broker.login(TerminalHandler())
         print(f"Logged in to {session.start_url}.")
         print("The native 'aws' CLI and SDKs can now use this session too.")
         print("Run 'grantry populate' once to create matching ~/.aws/config profiles.")
+        return 0
+
+    if args.command == "logout":
+        from grantry.awscli_cache import sso_cache_path
+
+        had = broker.logout()
+        cache = sso_cache_path(start)
+        if cache.exists():
+            cache.unlink()
+        print("Logged out." if had else "No active session to clear.")
         return 0
 
     if args.command == "ls":
@@ -316,6 +373,10 @@ def _human_credentials(broker: Broker, ident_key: str, ttl: str) -> tuple[int, o
     except NoSessionError:
         print("No active session. Run 'grantry login' first.")
         return 1, None
+    except Exception as e:  # a real AWS failure (throttling, network, denied API)
+        print(f"Could not get credentials: {e}")
+        print("Run 'grantry check' to diagnose your session and access.")
+        return 1, None
     if result.credentials is None:
         print(f"Denied: {result.decision.reason}")
         return 1, None
@@ -368,7 +429,7 @@ def _cmd_populate(
         return 1
     desired = {}
     for i in sorted(idents, key=lambda x: x.key):
-        name = f"{i.account_name}.{i.role_name}"
+        name = safe_profile_name(i.account_name, i.role_name)
         desired[name] = profile_block(
             name, i.account_id, i.role_name, start_url, sso_region, region
         )
@@ -460,6 +521,45 @@ def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
             "'grantry --start-url <url> --region <region> login' so agents inherit it."
         )
     return 0 if (dry_run or changed) else 1
+
+
+def _cmd_uninstall(client_keys: list[str]) -> int:
+    import json
+
+    from grantry.mcp_install import remove_server
+
+    if client_keys:
+        unknown = [k for k in client_keys if k not in CLIENTS]
+        if unknown:
+            print(f"Unknown client(s): {', '.join(unknown)}. Known: {', '.join(sorted(CLIENTS))}")
+            return 2
+        targets = [CLIENTS[k] for k in client_keys]
+    else:
+        targets = [c for c in CLIENTS.values() if os.path.exists(config_path(c))]
+        if not targets:
+            print("No AI client configs found.")
+            return 1
+
+    removed = 0
+    for client in targets:
+        path = config_path(client)
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            content = fh.read().strip()
+        config: dict[str, Any] = json.loads(content) if content else {}
+        updated, present = remove_server(config, client.root, "grantry")
+        if not present:
+            continue
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(updated, fh, indent=2)
+            fh.write("\n")
+        print(f"Removed grantry from {client.label} ({path}).")
+        removed += 1
+    if removed == 0:
+        print("grantry was not configured in any of those clients.")
+        return 1
+    return 0
 
 
 def _aws_config_path() -> str:

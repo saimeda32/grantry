@@ -21,8 +21,13 @@ def test_write_sso_cache_format_and_perms(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     session = Session(
-        "https://legalplans.awsapps.com/start", "us-east-1", "the-token", 1893456000.0,
-        refresh_token="rt", client_id="cid", client_secret="csec",
+        "https://legalplans.awsapps.com/start",
+        "us-east-1",
+        "the-token",
+        1893456000.0,
+        refresh_token="rt",
+        client_id="cid",
+        client_secret="csec",
     )
     write_sso_cache(session)
     path = sso_cache_path(session.start_url)
