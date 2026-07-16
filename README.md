@@ -31,10 +31,21 @@ policy, and one audit trail across every agent on your machine.
 
 ## Install
 
+Once grantry is published to PyPI:
+
 ```bash
 uvx grantry --help        # run without installing
 # or
 pipx install grantry
+```
+
+Until then, install from source:
+
+```bash
+git clone https://github.com/saimeda32/grantry
+cd grantry
+uv sync
+uv run grantry --help
 ```
 
 Works on macOS, Linux, and Windows. Python 3.10 or newer.
@@ -75,6 +86,10 @@ use `aws --profile ...` with no grantry in the loop.
 | `grantry mcp` | Run grantry as an MCP server for agents. |
 | `grantry install [client]` | Add grantry to an AI client's MCP config. Auto detects all if none named. |
 | `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. |
+| `grantry logout` | Clear the saved session for the current instance. |
+| `grantry instances` / `grantry use <name>` | List remembered orgs, or switch between them. |
+| `grantry install` / `grantry uninstall` | Add or remove grantry from an AI client's MCP config. |
+| `grantry version` | Print the version. |
 
 ## Use it with your AI agents
 
