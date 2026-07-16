@@ -48,7 +48,8 @@ def console_url(signin_token: str, destination: str = _DEFAULT_DESTINATION) -> s
 
 def _default_fetch(url: str) -> str:
     with urllib.request.urlopen(url, timeout=15) as resp:  # noqa: S310 - fixed AWS https URL
-        return resp.read().decode("utf-8")
+        data: bytes = resp.read()
+        return data.decode("utf-8")
 
 
 def build_console_url(

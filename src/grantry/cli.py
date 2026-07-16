@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     p_switch = sub.add_parser(
         "switch", parents=[inst], help="print shell exports to adopt an identity"
     )
-    p_switch.add_argument("identity")
+    p_switch.add_argument("identity", nargs="?", help="omit to pick interactively")
     p_switch.add_argument("--ttl", default="1h")
     p_credproc = sub.add_parser(
         "credential-process",
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     p_console = sub.add_parser(
         "console", parents=[inst], help="open the AWS console in a browser as an identity"
     )
-    p_console.add_argument("identity")
+    p_console.add_argument("identity", nargs="?", help="omit to pick interactively")
     p_console.add_argument("--ttl", default="1h")
     p_console.add_argument("--destination", default=None, help="a console URL to land on")
     p_console.add_argument(
@@ -271,13 +271,19 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run(broker, region, args.identity, args.ttl, args.cmd)
 
     if args.command == "switch":
-        return _cmd_switch(broker, region, args.identity, args.ttl)
+        ident = _resolve_identity(broker, args.identity)
+        if ident is None:
+            return 1
+        return _cmd_switch(broker, region, ident, args.ttl)
 
     if args.command == "credential-process":
         return _cmd_credential_process(broker, args.identity, args.ttl, args.caller)
 
     if args.command == "console":
-        return _cmd_console(broker, args.identity, args.ttl, args.destination, args.print_url)
+        ident = _resolve_identity(broker, args.identity)
+        if ident is None:
+            return 1
+        return _cmd_console(broker, ident, args.ttl, args.destination, args.print_url)
 
     if args.command == "populate":
         return _cmd_populate(broker, start, region, args.workload_region, args.dry_run)
@@ -430,6 +436,29 @@ def _human_credentials(
     if result.advisory:
         print(f"note: {result.advisory}", file=sys.stderr)
     return 0, result.credentials
+
+
+def _resolve_identity(broker: Broker, identity: str | None) -> str | None:
+    """Return the identity to use: the given one, or an interactive pick when it
+    was omitted. Prints a clear reason and returns None when it cannot resolve.
+    """
+    if identity:
+        return identity
+    from grantry.pick import choose
+
+    try:
+        idents = broker.identities()
+    except NoSessionError:
+        print("No active session. Run 'grantry login' first.")
+        return None
+    keys = sorted(i.key for i in idents)
+    if not keys:
+        print("No identities available.")
+        return None
+    chosen = choose(keys)
+    if chosen is None:
+        print("No identity chosen. Pass one explicitly, e.g. 'grantry switch acct/Role'.")
+    return chosen
 
 
 def _cmd_console(
