@@ -1,3 +1,5 @@
+from typing import Any
+
 from grantry.mcp_install import CLIENTS, merge_server, server_entry
 
 
@@ -18,7 +20,7 @@ def test_server_entry_omits_instance_when_unknown():
 
 
 def test_merge_adds_without_clobbering_others():
-    config: dict[str, object] = {"mcpServers": {"other": {"command": "x"}}, "unrelated": True}
+    config: dict[str, Any] = {"mcpServers": {"other": {"command": "x"}}, "unrelated": True}
     entry = {"command": "py", "args": [], "env": {}}
     out = merge_server(config, "mcpServers", "grantry", entry)
     assert out["mcpServers"]["other"] == {"command": "x"}  # preserved
