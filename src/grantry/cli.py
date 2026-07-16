@@ -91,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     p_pop.add_argument("--dry-run", action="store_true")
     p_pop.add_argument("--workload-region", default=None)
     sub.add_parser("check", help="diagnose configuration and access")
+    p_init = sub.add_parser("init", help="generate a starter policy from your real access")
+    p_init.add_argument("--force", action="store_true", help="overwrite an existing policy")
     p_install = sub.add_parser(
         "install", help="add grantry to an AI client's MCP config (auto-detects all if none named)"
     )
@@ -146,7 +148,30 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "check":
         return _cmd_check(broker)
 
+    if args.command == "init":
+        return _cmd_init(broker, args.force)
+
     return 2
+
+
+def _cmd_init(broker: Broker, force: bool) -> int:
+    from grantry.scaffold import scaffold_policy
+
+    path = state_path("policy.yaml")
+    if path.exists() and not force:
+        print(f"A policy already exists at {path}. Re-run with --force to overwrite it.")
+        return 1
+    try:
+        idents = broker.identities()
+    except NoSessionError:
+        print("No active session. Run 'grantry login' first.")
+        return 1
+    text = scaffold_policy(idents, _iso_now()[:10])
+    path.write_text(text)
+    print(f"Wrote a starter policy from your {len(idents)} identities to {path}.")
+    print("Review it, then agents you allow can request credentials. Custom roles are")
+    print("listed there and denied to agents until you add an allow rule for them.")
+    return 0
 
 
 def _human_credentials(broker: Broker, ident_key: str, ttl: str) -> tuple[int, object]:
