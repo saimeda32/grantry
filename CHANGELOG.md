@@ -4,6 +4,18 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.7.0] - 2026-07-16
+
+### Security
+- Closed a policy-gate escalation: an agent with a shell could run
+  `grantry run <account/role>` (or `switch`/`console`/`credential-process`) and
+  be evaluated as a trusted human, reaching anything you can and bypassing its
+  deny-by-default `agents` rules. Set `GRANTRY_CALLER=agent` in the agent's
+  environment and every grantry command now evaluates under the `agents` policy,
+  not only the MCP tools. `grantry check --sandbox` also flags when that marker
+  is missing. (Fully airtight only with the agent isolated from ambient AWS; a
+  malicious agent with a full shell could unset the variable.)
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
@@ -112,6 +124,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.7.0]: https://github.com/saimeda32/grantry/releases/tag/v0.7.0
 [0.6.0]: https://github.com/saimeda32/grantry/releases/tag/v0.6.0
 [0.5.0]: https://github.com/saimeda32/grantry/releases/tag/v0.5.0
 [0.4.0]: https://github.com/saimeda32/grantry/releases/tag/v0.4.0

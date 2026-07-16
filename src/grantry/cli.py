@@ -175,8 +175,8 @@ def _run(argv: list[str] | None = None) -> int:
     p_credproc.add_argument(
         "--caller",
         choices=["human", "agent"],
-        default="human",
-        help="policy class to evaluate as (default human)",
+        default=None,
+        help="policy class to evaluate as (default: human, or agent if GRANTRY_CALLER=agent)",
     )
     p_console = sub.add_parser(
         "console", parents=[inst], help="open the AWS console in a browser as an identity"
@@ -550,21 +550,41 @@ def _cmd_init(broker: Broker, force: bool) -> int:
     return 0
 
 
+def _cli_caller(explicit: str | None = None) -> str:
+    """Which policy class a CLI credential request is evaluated under.
+
+    A human at the keyboard is trusted, so CLI commands default to the 'humans'
+    section (default-allow). But the CLI cannot tell a human apart from an AI
+    agent that has a shell, so an agent could otherwise run
+    'grantry run <anything>' and escape its deny-by-default 'agents' rules.
+    Setting GRANTRY_CALLER=agent in the agent's environment makes every grantry
+    command evaluate under the 'agents' policy, closing that gap. An explicit
+    --caller (where a command offers one) still wins.
+    """
+    if explicit in ("agent", "human"):
+        assert explicit is not None
+        return explicit
+    if os.environ.get("GRANTRY_CALLER") == "agent":
+        return "agent"
+    return "human"
+
+
 def _human_credentials(
-    broker: Broker, ident_key: str, ttl: str, caller: str = "human"
+    broker: Broker, ident_key: str, ttl: str, caller: str | None = None
 ) -> tuple[int, object]:
     """Grant an identity. Returns (exit_code, credentials_or_None). exit_code is
     0 on success, non-zero with a printed reason otherwise.
     """
     from grantry.ttl import parse_ttl
 
+    resolved = _cli_caller(caller)
     try:
         seconds = parse_ttl(ttl)
     except ValueError as e:
         print(f"Invalid ttl: {e}")
         return 2, None
     try:
-        result = broker.grant(ident_key, seconds, caller=caller)
+        result = broker.grant(ident_key, seconds, caller=resolved)
     except NoSessionError:
         print("No active session. Run 'grantry login' first.")
         return 1, None
@@ -628,7 +648,7 @@ def _cmd_console(
     return 0
 
 
-def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: str) -> int:
+def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: str | None) -> int:
     # The AWS SDK spec: on success print the credential JSON to stdout and exit
     # 0; on failure print a human message to stderr and exit non-zero. Nothing
     # but the JSON may go to stdout, so all messages here use stderr.
@@ -636,13 +656,14 @@ def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: st
     from grantry.providers.base import Credentials
     from grantry.ttl import parse_ttl
 
+    resolved = _cli_caller(caller)
     try:
         seconds = parse_ttl(ttl)
     except ValueError as e:
         print(f"Invalid ttl: {e}", file=sys.stderr)
         return 2
     try:
-        result = broker.grant(ident_key, seconds, caller=caller)
+        result = broker.grant(ident_key, seconds, caller=resolved)
     except NoSessionError:
         print("No active grantry session. Run 'grantry login' first.", file=sys.stderr)
         return 1
@@ -810,6 +831,13 @@ def _cmd_sandbox_check() -> int:
         )
     elif "[profile" in text or "[default]" in text:
         findings.append(f"AWS profiles in {cfg} may provide ambient access")
+
+    if os.environ.get("GRANTRY_CALLER") != "agent":
+        findings.append(
+            "GRANTRY_CALLER is not 'agent', so grantry's own CLI (run, switch, console, "
+            "credential-process) would be evaluated as a trusted human. Set "
+            "GRANTRY_CALLER=agent so it is gated by your agents policy."
+        )
 
     if not findings:
         print("Sandbox check passed: no ambient AWS access detected.")

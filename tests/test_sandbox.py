@@ -16,6 +16,7 @@ def _clean_env(monkeypatch, tmp_path):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("GRANTRY_CALLER", "agent")
     for name in _AMBIENT:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("AWS_CONFIG_FILE", raising=False)
@@ -28,6 +29,15 @@ def test_sandbox_clean_passes(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "passed" in out.lower()
+
+
+def test_sandbox_flags_missing_caller_marker(tmp_path, monkeypatch, capsys):
+    _clean_env(monkeypatch, tmp_path)
+    monkeypatch.delenv("GRANTRY_CALLER", raising=False)  # the only gap
+    rc = main(["check", "--sandbox"])
+    out = capsys.readouterr().out
+    assert rc == 211
+    assert "GRANTRY_CALLER" in out
 
 
 def test_sandbox_detects_env_credentials(tmp_path, monkeypatch, capsys):

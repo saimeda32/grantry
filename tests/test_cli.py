@@ -216,6 +216,48 @@ def test_run_executes_command_with_credentials(tmp_path, monkeypatch, capfd):
     assert "AKIA" in out
 
 
+def test_cli_caller_resolution(monkeypatch):
+    from grantry.cli import _cli_caller
+
+    monkeypatch.delenv("GRANTRY_CALLER", raising=False)
+    assert _cli_caller() == "human"
+    assert _cli_caller("agent") == "agent"
+    assert _cli_caller("human") == "human"
+    monkeypatch.setenv("GRANTRY_CALLER", "agent")
+    assert _cli_caller() == "agent"
+    assert _cli_caller("human") == "human"  # an explicit flag still wins
+
+
+def test_run_as_human_is_allowed_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("GRANTRY_CALLER", raising=False)
+    b = _fake_broker(tmp_path, monkeypatch)  # policy has no agents allow rules
+    code = _cmd_run(b, "us-east-1", "prod/ReadOnlyAccess", "1h", ["--", "true"])
+    assert code == 0  # humans section is default-allow
+
+
+def test_run_with_agent_env_is_denied_by_policy(tmp_path, monkeypatch, capsys):
+    # The escalation the security review flagged: an agent with a shell running
+    # 'grantry run <anything>' must NOT get the human default-allow when the env
+    # marks it as an agent. With no agents allow rules, this is denied.
+    b = _fake_broker(tmp_path, monkeypatch)
+    monkeypatch.setenv("GRANTRY_CALLER", "agent")
+    code = _cmd_run(b, "us-east-1", "prod/ReadOnlyAccess", "1h", ["--", "true"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "Denied" in out
+
+
+def test_credential_process_agent_env_is_denied(tmp_path, monkeypatch, capsys):
+    from grantry.cli import _cmd_credential_process
+
+    b = _fake_broker(tmp_path, monkeypatch)
+    monkeypatch.setenv("GRANTRY_CALLER", "agent")
+    code = _cmd_credential_process(b, "prod/ReadOnlyAccess", "1h", None)
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "Denied" in err
+
+
 def test_switch_prints_exports(tmp_path, monkeypatch, capsys):
     b = _fake_broker(tmp_path, monkeypatch)
     code = _cmd_switch(b, "us-east-1", "prod/ReadOnlyAccess", "1h")

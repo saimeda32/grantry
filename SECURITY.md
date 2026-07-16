@@ -41,6 +41,18 @@ container with a clean home directory), so that grantry's MCP tools are its
 only path to credentials. Without that isolation, treat grantry as audit and
 convenience, not containment.
 
+**grantry's own CLI can be a bypass unless you mark the caller.** The human
+commands (`run`, `switch`, `console`, `credential-process`) are evaluated under
+the trusted `humans` policy, which is allow-by-default, because the CLI cannot
+tell a person apart from an agent that has a shell. So by default an agent could
+run `grantry run <account/role>` and reach anything you can, around its `agents`
+rules. To close this, set `GRANTRY_CALLER=agent` in the agent's environment:
+every grantry command then evaluates under the deny-by-default `agents` policy,
+not only the MCP tools. A malicious agent with a full shell could unset that
+variable, so this is airtight only when combined with the isolation above (the
+sandbox you control sets the environment). But it makes the policy actually
+apply in the normal agent case instead of being silently skipped.
+
 **The MCP tool returns credentials as text to the agent.** `get_credentials`
 hands the agent an `AWS_...` block so it can act. That text enters the agent's
 context and is sent to whatever model provider the agent uses. If that matters

@@ -259,15 +259,17 @@ Everything survives reboots. To remove grantry state: `grantry logout` and
   credentials themselves.
 
 Read this honestly before relying on grantry as a control: the policy gate only
-covers the MCP door. If an agent also has a shell and you have run
-`grantry populate`, the agent can use `aws --profile ...` directly and bypass
-the gate. For the gate to be a real boundary, run the agent with no ambient AWS
-access. Run `grantry check --sandbox` inside the agent's environment to verify
-that: it reports any credential env vars, static credentials file, or native
-profiles that would let the agent go around grantry, and exits non-zero if it
-finds any, so you can wire it into a sandbox startup check. And `get_credentials` returns credentials as text into the agent's
-context. See [SECURITY.md](SECURITY.md) for the full picture and to report a
-vulnerability.
+covers the MCP door. An agent that also has a shell could otherwise run
+`grantry run <account/role>` (evaluated as a trusted human) or, if you have run
+`grantry populate`, use `aws --profile ...` directly, bypassing the gate. Set
+`GRANTRY_CALLER=agent` in the agent's environment so every grantry command is
+evaluated under your deny-by-default `agents` policy, and run the agent with no
+ambient AWS access. Run `grantry check --sandbox` inside the agent's environment
+to verify that: it reports any credential env vars, static credentials file, or
+native profiles that would let the agent go around grantry, and exits non-zero if
+it finds any, so you can wire it into a sandbox startup check. And
+`get_credentials` returns credentials as text into the agent's context. See
+[SECURITY.md](SECURITY.md) for the full picture and to report a vulnerability.
 
 ## Roadmap
 
