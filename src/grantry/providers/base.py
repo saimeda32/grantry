@@ -30,6 +30,9 @@ class InteractionHandler(Protocol):
 
 
 class Provider(Protocol):
+    # The issuer URL a session is keyed from. Every provider exposes it.
+    start_url: str
+
     def name(self) -> str: ...
     def start_login(self, handler: InteractionHandler) -> Session: ...
     def list_identities(self, session: Session) -> list[Identity]: ...

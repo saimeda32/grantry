@@ -46,9 +46,7 @@ class Broker:
         self._clock_iso = clock_iso
 
     def _start_url(self) -> str:
-        # The Provider Protocol does not expose start_url; the AWS provider sets
-        # it as an attribute, which is where the session is keyed from.
-        return str(getattr(self._provider, "start_url"))
+        return self._provider.start_url
 
     def login(self, handler: InteractionHandler) -> Session:
         session = self._provider.start_login(handler)
