@@ -33,10 +33,19 @@ policy, and one audit trail across every agent on your machine.
 
 ## Install
 
+Install grantry as a persistent command with either tool:
+
 ```bash
-uvx grantry --help        # run without installing
+uv tool install grantry
 # or
 pipx install grantry
+```
+
+Now `grantry --help` works from anywhere. To try it once without installing
+(this runs in a throwaway environment and does not add `grantry` to your PATH):
+
+```bash
+uvx grantry --help
 ```
 
 Or from source:
@@ -49,6 +58,11 @@ uv run grantry --help
 ```
 
 Works on macOS, Linux, and Windows. Python 3.10 or newer.
+
+Homebrew is not provided. grantry is a Python CLI, so `uv tool install` and
+`pipx` are the fast, idiomatic way to get it, and they work the same on macOS and
+Linux. (A Homebrew formula would compile several dependencies from source on
+every install and is not worth the friction for a single-maintainer tap.)
 
 ## Quick start
 
