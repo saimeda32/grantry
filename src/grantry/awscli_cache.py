@@ -47,8 +47,10 @@ def write_sso_cache(session: Session) -> None:
     }
     fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
     # Repair perms even if the file pre-existed. fchmod is absent on Windows,
-    # where the create mode is applied instead, so ignore its absence.
-    with contextlib.suppress(AttributeError, OSError):
-        os.fchmod(fd, 0o600)
+    # where the create mode is applied instead, so guard for its absence.
+    fchmod = getattr(os, "fchmod", None)
+    if fchmod is not None:
+        with contextlib.suppress(OSError):
+            fchmod(fd, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(entry, fh)
