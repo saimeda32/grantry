@@ -14,12 +14,15 @@ from grantry.ttl import parse_ttl
 def _render_credentials(result: GrantResult) -> str:
     c = result.credentials
     assert c is not None
-    return (
+    block = (
         f"AWS_ACCESS_KEY_ID={c.access_key_id}\n"
         f"AWS_SECRET_ACCESS_KEY={c.secret_access_key}\n"
         f"AWS_SESSION_TOKEN={c.session_token}\n"
         f"AWS_CREDENTIALS_EXPIRATION={c.expiration}"
     )
+    if result.advisory:
+        block += f"\n# note: {result.advisory}"
+    return block
 
 
 def _render_denied(result: GrantResult) -> str:

@@ -91,9 +91,16 @@ Three rules govern it:
 2. For agents, anything not allowed is refused (safe by default).
 3. For you, anything not mentioned is allowed.
 
-Every credential is time-capped to its section's `max_ttl`. If the policy file
-is missing or invalid, agents get nothing and humans still work, so a mistake
+Every request is capped to its section's `max_ttl`. If the policy file is
+missing or invalid, agents get nothing and humans still work, so a mistake
 fails safe.
+
+A note on TTL and AWS: grantry cannot shorten an SSO credential below the
+lifetime AWS issues it with, because the reserved SSO roles do not permit
+client-side re-assumption. grantry reports the real AWS expiration (so SDKs
+refresh correctly) and, when AWS hands back a credential that outlives your
+policy cap, adds an advisory. The real control for short sessions is the
+permission set's session duration, set by an admin in IAM Identity Center.
 
 An identity is `account-name/role-name`, and `*` is a wildcard, so
 `dev-*/ReadOnlyAccess` means read-only in any account whose name starts with

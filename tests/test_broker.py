@@ -27,7 +27,8 @@ class FakeProvider:
         return self._idents
 
     def mint(self, session, ident, ttl):
-        return Credentials("AKIA", "sec", "sess", time.time() + ttl)
+        # A real SSO provider ignores ttl and returns AWS's fixed ~1h lifetime.
+        return Credentials("AKIA", "sec", "sess", 1000.0 + 3600)
 
 
 POLICY = """
@@ -105,3 +106,25 @@ def test_unknown_identity_denied(tmp_path, monkeypatch):
     res = broker.grant("prod/NopeAccess", requested_ttl=60, caller="agent")
     assert not res.decision.allowed
     assert res.credentials is None
+
+
+def test_advisory_when_aws_outlives_cap(tmp_path, monkeypatch):
+    # now=1000, policy caps agents to 15m, AWS returns a 1h credential.
+    broker = build(tmp_path, monkeypatch)
+    broker.login(H())
+    res = broker.grant("prod/ReadOnlyAccess", requested_ttl=900, caller="agent")
+    assert res.decision.capped_ttl == 900
+    assert res.credentials is not None
+    assert res.advisory is not None
+    assert "advisory" in res.advisory.lower()
+    assert "session duration" in res.advisory.lower()
+    # The reported expiration is AWS's real one, not the capped window.
+    assert res.credentials.expiration == 1000.0 + 3600
+
+
+def test_no_advisory_when_within_cap(tmp_path, monkeypatch):
+    # Human section caps at 12h, so a 1h AWS credential is within the cap.
+    broker = build(tmp_path, monkeypatch)
+    broker.login(H())
+    res = broker.grant("prod/ReadOnlyAccess", requested_ttl=43200, caller="human")
+    assert res.advisory is None

@@ -15,6 +15,13 @@ from grantry.identity import Identity
 from grantry.policy import Decision, Policy
 from grantry.providers.base import Credentials, InteractionHandler, Provider, Session
 from grantry.secrets import SecretStore, token_name
+from grantry.ttl import format_ttl
+
+# AWS-issued SSO credentials cannot be shortened client-side (the reserved SSO
+# roles do not trust re-assumption). When AWS hands back a credential that
+# outlives the policy cap by more than this margin, grantry adds an advisory so
+# the operator knows the cap is advisory and where the real control lives.
+_ADVISORY_MARGIN = 60
 
 
 class NoSessionError(Exception):
@@ -25,6 +32,7 @@ class NoSessionError(Exception):
 class GrantResult:
     credentials: Credentials | None
     decision: Decision
+    advisory: str | None = None
 
 
 class Broker:
@@ -118,7 +126,19 @@ class Broker:
         if not decision.allowed:
             return GrantResult(None, decision)
         creds = self._provider.mint(session, ident, decision.capped_ttl)
-        return GrantResult(creds, decision)
+        advisory = self._advisory(creds, decision.capped_ttl)
+        return GrantResult(creds, decision, advisory=advisory)
+
+    def _advisory(self, creds: Credentials, capped_ttl: int) -> str | None:
+        real_remaining = creds.expiration - self._now()
+        if real_remaining <= capped_ttl + _ADVISORY_MARGIN:
+            return None
+        return (
+            f"AWS issued these credentials valid for about {format_ttl(int(real_remaining))}; "
+            f"the policy cap of {format_ttl(capped_ttl)} is advisory. AWS does not allow "
+            f"shortening SSO credentials client-side. To enforce shorter sessions, lower the "
+            f"permission set's session duration in IAM Identity Center."
+        )
 
     def _find(self, session: Session, ident_key: str) -> Identity | None:
         return next(
