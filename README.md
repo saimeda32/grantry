@@ -135,24 +135,28 @@ access. See [examples/policy.yaml](examples/policy.yaml).
 ```yaml
 agents:
   allow:
-    - identity: "*/AWSReadOnlyAccess"
-    - identity: "dev-*/AWSPowerUserAccess"
+    - identity: "*/AWSReadOnlyAccess"        # read-only role in ANY account
+    - identity: "sandbox/*"                   # ANY role, but only in the sandbox account
+    - identity: "dev-*/AWSPowerUserAccess"    # power-user role, only in dev-* accounts
   deny:
-    - identity: "*prod*/*Admin*"
+    - identity: "*prod*/*"                     # nothing at all in production accounts
+    - identity: "*/AWSAdministratorAccess"     # no admin role, in any account
   max_ttl: 15m
 humans:
   max_ttl: 12h
 ```
+
+Every identity is `account-name/role-name`, so you scope by account, by role,
+or both. `*` is a wildcard within a segment and does not cross the slash, so
+`sandbox/*` means every role in the `sandbox` account, `*/AWSReadOnlyAccess`
+means the read-only role in every account, and `dev-*/AWSPowerUserAccess` means
+that role only in accounts whose name starts with `dev`.
 
 Three rules govern it:
 
 1. A deny always beats an allow.
 2. For agents, anything not allowed is refused. Safe by default.
 3. For you, anything not mentioned is allowed.
-
-An identity is `account-name/role-name`, and `*` is a wildcard, so
-`dev-*/AWSReadOnlyAccess` means read only in any account whose name starts with
-`dev`.
 
 A note on TTL and AWS: grantry cannot shorten an SSO credential below the
 lifetime AWS issues it with, because the reserved SSO roles do not allow client
