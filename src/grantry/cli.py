@@ -23,6 +23,7 @@ from grantry.humanops import (
 )
 from grantry.instance import load_instance, save_instance
 from grantry.logging_setup import configure_logging
+from grantry.mcp_install import CLIENTS, config_path, grantry_command, merge_server, server_entry
 from grantry.mcp_server import build_mcp
 from grantry.policy import Policy
 from grantry.providers.aws import AwsProvider
@@ -90,6 +91,13 @@ def main(argv: list[str] | None = None) -> int:
     p_pop.add_argument("--dry-run", action="store_true")
     p_pop.add_argument("--workload-region", default=None)
     sub.add_parser("check", help="diagnose configuration and access")
+    p_install = sub.add_parser(
+        "install", help="add grantry to an AI client's MCP config (auto-detects all if none named)"
+    )
+    p_install.add_argument(
+        "clients", nargs="*", help="claude-code, cursor, vscode, ... (blank = all found)"
+    )
+    p_install.add_argument("--dry-run", action="store_true")
 
     args = parser.parse_args(argv)
     configure_logging(args.verbose)
@@ -99,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
             verdict = "allow" if e["allowed"] else "deny"
             print(f"{e['at']} {e['caller']} {e['identity']} {verdict} ({e['reason']})")
         return 0
+
+    if args.command == "install":
+        return _cmd_install(args.clients, args.dry_run)
 
     start, region = _instance(args)
     broker = build_broker(start, region)
@@ -242,6 +253,63 @@ def _cmd_check(broker: Broker) -> int:
         return 202
     print(f"Access OK: {len(idents)} identities reachable.")
     return 0
+
+
+def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
+    import json
+    from typing import Any
+
+    saved = load_instance()
+    start_url = saved.start_url if saved else None
+    region = saved.region if saved else None
+    command, cmd_args = grantry_command()
+
+    if client_keys:
+        unknown = [k for k in client_keys if k not in CLIENTS]
+        if unknown:
+            print(f"Unknown client(s): {', '.join(unknown)}. Known: {', '.join(sorted(CLIENTS))}")
+            return 2
+        targets = [CLIENTS[k] for k in client_keys]
+    else:
+        # Auto-detect: a client counts as present if its config file exists, or
+        # its parent directory does (installed but no MCP config yet).
+        targets = [
+            c
+            for c in CLIENTS.values()
+            if os.path.exists(config_path(c)) or os.path.isdir(os.path.dirname(config_path(c)))
+        ]
+        if not targets:
+            print(
+                "No known AI clients detected. Name one explicitly, e.g. 'grantry install cursor'."
+            )
+            return 1
+
+    changed = 0
+    for client in targets:
+        path = config_path(client)
+        config: dict[str, Any] = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                content = fh.read().strip()
+                config = json.loads(content) if content else {}
+        # Each client tags its own attribution label.
+        client_entry = server_entry(command, cmd_args, client.key, start_url, region)
+        merged = merge_server(config, client.root, "grantry", client_entry)
+        if dry_run:
+            print(f"[dry-run] would write grantry to {client.label} at {path}")
+            continue
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(merged, fh, indent=2)
+            fh.write("\n")
+        print(f"Added grantry to {client.label} ({path}). Restart {client.label} to load it.")
+        changed += 1
+    if not start_url:
+        print(
+            "\nNote: no Identity Center instance saved yet. Run "
+            "'grantry --start-url <url> --region <region> login' so agents inherit it."
+        )
+    return 0 if (dry_run or changed) else 1
 
 
 def _aws_config_path() -> str:
