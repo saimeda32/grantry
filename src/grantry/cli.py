@@ -123,12 +123,16 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(argv: list[str] | None = None) -> int:
+    from grantry import __version__
     from grantry.appconfig import load_config
 
     app_cfg = load_config()
     default_ttl = app_cfg.ttl
     parser = argparse.ArgumentParser(prog="grantry")
     parser.add_argument("-v", "--verbose", action="count", default=0)
+    # Support the conventional --version/-V flag in addition to the 'version'
+    # subcommand, since that is what people reflexively type.
+    parser.add_argument("-V", "--version", action="version", version=f"grantry {__version__}")
     parser.add_argument("--start-url", default=None)
     parser.add_argument("--region", default=None)
     # A shared parent so the instance flags also work AFTER the subcommand

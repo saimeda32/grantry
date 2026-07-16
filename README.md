@@ -57,6 +57,8 @@ uv sync
 uv run grantry --help
 ```
 
+To upgrade later: `uv tool upgrade grantry` (or `pipx upgrade grantry`).
+
 Works on macOS, Linux, and Windows. Python 3.10 or newer.
 
 Homebrew is not provided. grantry is a Python CLI, so `uv tool install` and

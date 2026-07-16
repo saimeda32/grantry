@@ -4,6 +4,12 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.1] - 2026-07-16
+
+### Added
+- `grantry --version` / `-V` now work, in addition to the `grantry version`
+  subcommand.
+
 ## [0.8.0] - 2026-07-16
 
 ### Changed
@@ -142,6 +148,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.8.1]: https://github.com/saimeda32/grantry/releases/tag/v0.8.1
 [0.8.0]: https://github.com/saimeda32/grantry/releases/tag/v0.8.0
 [0.7.0]: https://github.com/saimeda32/grantry/releases/tag/v0.7.0
 [0.6.0]: https://github.com/saimeda32/grantry/releases/tag/v0.6.0

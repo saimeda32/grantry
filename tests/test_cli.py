@@ -359,6 +359,16 @@ def test_version_command(capsys):
     assert out.startswith("grantry ")
 
 
+def test_version_flag(capsys):
+    import pytest
+
+    # argparse's version action prints and exits 0.
+    with pytest.raises(SystemExit) as e:
+        main(["--version"])
+    assert e.value.code == 0
+    assert capsys.readouterr().out.startswith("grantry ")
+
+
 def test_completion_command(capsys):
     rc = main(["completion", "bash"])
     out = capsys.readouterr().out
