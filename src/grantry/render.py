@@ -8,6 +8,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from grantry.admin import Assignment
 from grantry.graphdata import AccessSurface
 
 _STYLE = """
@@ -103,6 +104,76 @@ def render_access_surface(surface: AccessSurface, generated_on: str) -> str:
   <span><span class="swatch" style="background:var(--deny)"></span>denied</span>
 </div>
 <div class="matrix-wrap"><table>{body}</table></div>
+</body></html>
+"""
+
+
+def render_assignments(assignments: list[Assignment], generated_on: str) -> str:
+    # Aggregate so the page stays legible at 10k+ rows: rank principals by reach
+    # and permission sets by spread, rather than dumping every raw row.
+    principals: dict[str, set[str]] = {}
+    principal_type: dict[str, str] = {}
+    psets: dict[str, set[str]] = {}
+    accounts: set[str] = set()
+    for a in assignments:
+        principals.setdefault(a.principal_name, set()).add(f"{a.account_id}/{a.permission_set_name}")
+        principal_type[a.principal_name] = a.principal_type
+        psets.setdefault(a.permission_set_name, set()).add(a.account_id)
+        accounts.add(a.account_id)
+
+    kpis = [
+        (len(assignments), "assignments"),
+        (len(principals), "principals"),
+        (len(psets), "permission sets"),
+        (len(accounts), "accounts"),
+    ]
+    kpi_html = "".join(
+        f'<div class="kpi"><div class="v">{v}</div><div class="k">{_esc(k)}</div></div>'
+        for v, k in kpis
+    )
+
+    top_principals = sorted(principals.items(), key=lambda kv: len(kv[1]), reverse=True)
+    prow = "".join(
+        "<tr>"
+        f"<td>{_esc(name)}</td>"
+        f"<td>{_esc(principal_type.get(name, ''))}</td>"
+        f"<td class='num'>{len(grants)}</td>"
+        "</tr>"
+        for name, grants in top_principals[:100]
+    )
+    top_ps = sorted(psets.items(), key=lambda kv: len(kv[1]), reverse=True)
+    psrow = "".join(
+        f"<tr><td>{_esc(name)}</td><td class='num'>{len(accts)}</td></tr>"
+        for name, accts in top_ps
+    )
+
+    note = ""
+    if len(top_principals) > 100:
+        note = f"<div class='sub'>Showing the top 100 of {len(top_principals)} principals by reach.</div>"
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>grantry org assignments</title>
+<style>{_STYLE}
+td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+.grid {{ display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }}
+.card {{ border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; }}
+.card h2 {{ font-size: 13px; margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }}
+@media (max-width: 780px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+</style></head><body>
+<h1>Organization access map</h1>
+<div class="sub">Who can assume which permission set in which account. Snapshot {_esc(generated_on)}.</div>
+<div class="kpis">{kpi_html}</div>
+{note}
+<div class="grid">
+  <div class="card"><h2>Principals by reach (account + permission-set grants)</h2>
+    <table><thead><tr><th>principal</th><th>type</th><th class="num">grants</th></tr></thead>
+    <tbody>{prow}</tbody></table></div>
+  <div class="card"><h2>Permission sets by account spread</h2>
+    <table><thead><tr><th>permission set</th><th class="num">accounts</th></tr></thead>
+    <tbody>{psrow}</tbody></table></div>
+</div>
 </body></html>
 """
 

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+from typing import Any
 
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
@@ -107,6 +108,15 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("check", help="diagnose configuration and access")
     p_init = sub.add_parser("init", help="generate a starter policy from your real access")
     p_init.add_argument("--force", action="store_true", help="overwrite an existing policy")
+    p_admin = sub.add_parser("admin", help="administrator commands (need management access)")
+    admin_sub = p_admin.add_subparsers(dest="admin_command", required=True)
+    p_assign = admin_sub.add_parser("assignments", help="crawl who-has-what across the org")
+    p_assign.add_argument(
+        "--as", dest="as_identity", required=True, help="admin identity to crawl with"
+    )
+    p_assign.add_argument("--ttl", default="1h")
+    p_assign.add_argument("--visualize", action="store_true")
+    p_assign.add_argument("-o", "--out", default="grantry-assignments.html")
     p_install = sub.add_parser(
         "install", help="add grantry to an AI client's MCP config (auto-detects all if none named)"
     )
@@ -179,7 +189,73 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "graph":
         return _cmd_graph(broker, args.caller, args.out)
 
+    if args.command == "admin":
+        if args.admin_command == "assignments":
+            return _cmd_admin_assignments(
+                broker, region, args.as_identity, args.ttl, args.visualize, args.out
+            )
+        return 2
+
     return 2
+
+
+def _cmd_admin_assignments(
+    broker: Broker, region: str, as_identity: str, ttl: str, visualize: bool, out: str
+) -> int:
+    import sys as _sys
+
+    from grantry.admin import crawl_assignments
+
+    code, creds = _human_credentials(broker, as_identity, ttl)
+    if code != 0 or creds is None:
+        return code
+    from grantry.providers.base import Credentials
+
+    assert isinstance(creds, Credentials)
+
+    import botocore.session
+    from botocore.config import Config
+
+    cfg = Config(retries={"mode": "standard", "max_attempts": 10})
+
+    def make_client(service: str) -> Any:  # noqa: ANN401
+        session = botocore.session.Session()
+        return session.create_client(
+            service,
+            region_name=region,
+            aws_access_key_id=creds.access_key_id,
+            aws_secret_access_key=creds.secret_access_key,
+            aws_session_token=creds.session_token,
+            config=cfg,
+        )
+
+    def progress(done: int, total: int) -> None:
+        print(f"\rCrawling accounts {done}/{total}...", end="", file=_sys.stderr, flush=True)
+
+    try:
+        assignments = crawl_assignments(make_client, on_progress=progress)
+    except Exception as e:  # surface AWS access errors clearly
+        print(f"\nCrawl failed: {e}", file=_sys.stderr)
+        print("The identity you crawled with may lack sso-admin/organizations access.")
+        return 1
+    print("", file=_sys.stderr)
+
+    if visualize:
+        from grantry.render import render_assignments
+
+        html = render_assignments(assignments, _iso_now()[:10])
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(html)
+        print(f"Wrote {len(assignments)} assignments to {out}")
+        return 0
+
+    print("principal_type,principal_name,permission_set,account_id,account_name")
+    for a in assignments:
+        print(
+            f"{a.principal_type},{a.principal_name},{a.permission_set_name},"
+            f"{a.account_id},{a.account_name}"
+        )
+    return 0
 
 
 def _cmd_graph(broker: Broker, caller: str, out: str) -> int:
@@ -332,7 +408,6 @@ def _cmd_check(broker: Broker) -> int:
 
 def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
     import json
-    from typing import Any
 
     saved = load_instance()
     start_url = saved.start_url if saved else None
