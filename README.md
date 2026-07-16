@@ -59,7 +59,19 @@ grantry mcp       # run grantry as an MCP server for agents (stdio)
 
 ## Let an agent use it
 
-Point your MCP client at `grantry mcp`. It exposes four tools:
+One command wires grantry into your AI clients' MCP config:
+
+```bash
+grantry install            # auto-detect every client you have and add grantry
+grantry install cursor     # or a specific one
+grantry install --dry-run  # preview without writing
+```
+
+Supported clients: `claude-code`, `claude-desktop`, `cursor`, `windsurf`,
+`vscode`. grantry is added without disturbing your other MCP servers, and each
+client is tagged with its own audit label. Restart the client to load it.
+
+Under the hood it points the client at `grantry mcp`, which exposes four tools:
 
 - `whoami` reports whether a session is active and when it expires.
 - `list_identities` lists the account/role names the agent could request.
