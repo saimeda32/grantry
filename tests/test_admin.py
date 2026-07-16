@@ -79,7 +79,7 @@ def test_no_instances_returns_empty():
     assert crawl_assignments(lambda n: NoInst()) == []
 
 
-def test_render_assignments_self_contained():
+def test_render_assignments_is_interactive_graph():
     from grantry.admin import Assignment
 
     rows = [
@@ -87,7 +87,22 @@ def test_render_assignments_self_contained():
         Assignment("USER", "u1", "casey", "AWSAdministratorAccess", "222", "mlp-prod"),
     ]
     html = render_assignments(rows, "2026-07-16")
-    assert "Organization access map" in html
-    assert "Platform Eng" in html
-    for banned in ("http://", "https://", "<script", "src="):
+    # the injected data is present and the graph JS is there (node-link, not a table)
+    assert "/*DATA*/" not in html
+    assert '"Platform Eng"' in html
+    assert "Organization Access Graph" in html
+    assert "const DATA = [" in html
+    # self-contained: no external scripts, styles, imports, or fetches. (The SVG
+    # xmlns namespace URL is not a network request, so we ban the request forms.)
+    for banned in ("<script src", "<link ", "@import", "fetch(", "https://cdn", "src=\"http"):
         assert banned not in html
+
+
+def test_render_assignments_escapes_script_breakout():
+    from grantry.admin import Assignment
+
+    evil = [Assignment("USER", "u1", "</script><b>x", "role", "111", "acct")]
+    html = render_assignments(evil, "2026-07-16")
+    # the template legitimately contains its own </script>; the injected data must not add one
+    assert "</script><b>x" not in html
+    assert "\\u003c/script>" in html
