@@ -68,6 +68,23 @@ After `grantry login`, the native `aws` CLI, boto3, and Terraform work too. Run
 `grantry populate` once to create the matching profiles in `~/.aws/config`, then
 use `aws --profile ...` with no grantry in the loop.
 
+### Route native tools through grantry (audited)
+
+If you want every native credential fetch to go through grantry, so it is
+checked against your policy and written to the audit log, add a
+`credential_process` profile instead of a plain SSO profile:
+
+```ini
+[profile prod-readonly]
+credential_process = grantry credential-process --identity prod/AWSReadOnlyAccess
+region = us-east-1
+```
+
+Now `aws --profile prod-readonly ...`, boto3, and Terraform all get their
+credentials from grantry. This is also how you make grantry a real boundary for
+a sandboxed agent: give the sandbox only a `credential_process` profile with
+`--caller agent`, and the agent cannot reach anything the policy denies.
+
 ## Commands
 
 | Command | What it does |
@@ -75,7 +92,9 @@ use `aws --profile ...` with no grantry in the loop.
 | `grantry login` | Log in to Identity Center once, for all accounts and roles. |
 | `grantry ls` | List the account and role identities you can use. |
 | `grantry run <id> -- <cmd>` | Run a command as a chosen identity. |
-| `grantry switch <id>` | Print shell exports so `eval "$(grantry switch <id>)"` adopts an identity. |
+| `grantry switch [id]` | Print shell exports to adopt an identity. Omit the id to pick interactively. |
+| `grantry console [id]` | Open the AWS console in your browser as an identity. Omit the id to pick. |
+| `grantry credential-process --identity <id>` | Emit credentials as JSON for an AWS config `credential_process` entry, so native `aws`/boto3/Terraform route through grantry. |
 | `grantry populate` | Write `~/.aws/config` profiles for your access. Adds, updates, and prunes only its own profiles. |
 | `grantry check` | Diagnose your session and access, with clear exit codes. |
 | `grantry init` | Generate a working policy from your real access. |
@@ -83,7 +102,7 @@ use `aws --profile ...` with no grantry in the loop.
 | `grantry graph` | Write an HTML map of what your agents can reach under the policy. |
 | `grantry mcp` | Run grantry as an MCP server for agents. |
 | `grantry install [client]` | Add grantry to an AI client's MCP config. Auto detects all if none named. |
-| `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. |
+| `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. Add `--snapshot` to save it, or `--diff` to see what changed since the last snapshot. |
 | `grantry logout` | Clear the saved session for the current instance. |
 | `grantry instances` / `grantry use <name>` | List remembered orgs, or switch between them. |
 | `grantry install` / `grantry uninstall` | Add or remove grantry from an AI client's MCP config. |
