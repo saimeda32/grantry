@@ -399,7 +399,11 @@ def _cmd_run(broker: Broker, region: str, ident_key: str, ttl: str, cmd: list[st
 
     assert isinstance(creds, Credentials)
     child_env = {**os.environ, **env_from_credentials(creds, region)}
-    completed = subprocess.run(cmd, env=child_env, check=False)
+    try:
+        completed = subprocess.run(cmd, env=child_env, check=False)
+    except FileNotFoundError:
+        print(f"Command not found: {cmd[0]}")
+        return 127
     return completed.returncode
 
 

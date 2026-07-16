@@ -126,6 +126,12 @@ def strip_profiles(text: str, names: set[str]) -> str:
             header = stripped[1:-1].strip()
             name = header[len("profile ") :] if header.startswith("profile ") else None
             skipping = name in names
+        elif skipping and stripped == "":
+            # A blank line ends the managed block. Stop skipping so comments and
+            # blank lines that belong to the NEXT (hand-written) section survive.
+            skipping = False
+            out.append(line)
+            continue
         if not skipping:
             out.append(line)
     return "".join(out)

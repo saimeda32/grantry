@@ -101,3 +101,18 @@ def test_safe_profile_name_sanitizes():
     assert safe_profile_name("acct (main)", "role/x") == "acct-main.role-x"
     # never produces an empty side
     assert safe_profile_name("  ", "  ") == "account.role"
+
+
+def test_strip_profiles_keeps_next_sections_comments():
+    text = (
+        "[profile managed.Role]\n"
+        "grantry_managed = true\n"
+        "\n"
+        "# comment for the hand-written profile below\n"
+        "[profile hand]\n"
+        "region = us-east-1\n"
+    )
+    out = strip_profiles(text, {"managed.Role"})
+    assert "[profile managed.Role]" not in out
+    assert "# comment for the hand-written profile below" in out
+    assert "[profile hand]" in out

@@ -24,6 +24,16 @@ class _RedactFilter(logging.Filter):
         return True
 
 
+class _RedactFormatter(logging.Formatter):
+    """A formatter that redacts the FINAL rendered line, including any exception
+    traceback the base formatter appends after the filter has run. This closes
+    the gap where a token embedded in an exception message would slip through.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact(super().format(record))
+
+
 def configure_logging(verbosity: int = 0) -> None:
     level = logging.WARNING
     if verbosity == 1:
@@ -32,7 +42,7 @@ def configure_logging(verbosity: int = 0) -> None:
         level = logging.DEBUG
     handler = logging.StreamHandler()
     handler.addFilter(_RedactFilter())
-    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(_RedactFormatter("%(levelname)s %(name)s: %(message)s"))
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)

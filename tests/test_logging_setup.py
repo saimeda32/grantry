@@ -24,3 +24,13 @@ def test_handler_filter_redacts(capsys):
     logging.getLogger("grantry.test").debug("token=supersecretvalue1234567890abcd")
     err = capsys.readouterr().err
     assert "supersecretvalue1234567890abcd" not in err
+
+
+def test_redacts_secret_in_exception_traceback(capsys):
+    configure_logging(verbosity=2)
+    try:
+        raise ValueError("token=supersecretvalue1234567890abcd leaked in exc")
+    except ValueError:
+        logging.getLogger("grantry.test").exception("boom")
+    err = capsys.readouterr().err
+    assert "supersecretvalue1234567890abcd" not in err

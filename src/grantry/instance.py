@@ -34,8 +34,15 @@ def _short_name(start_url: str) -> str:
 def _read() -> dict[str, Any]:
     path = state_path(_FILE)
     if path.exists():
-        loaded: dict[str, Any] = json.loads(path.read_text())
-        return loaded
+        try:
+            loaded = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            # A corrupt or hand-mangled state file must not crash every command.
+            return {"current": None, "instances": {}}
+        if not isinstance(loaded, dict) or "instances" not in loaded:
+            return {"current": None, "instances": {}}
+        result: dict[str, Any] = loaded
+        return result
     # Migrate the old single-instance file if present.
     legacy = state_path(_LEGACY)
     if legacy.exists():
@@ -89,10 +96,16 @@ def use_instance(name: str) -> InstanceConfig | None:
     None if the name matches no known instance.
     """
     data = _read()
-    matches = [n for n in data["instances"] if n == name or n.startswith(name)]
-    if len(matches) != 1:
-        return None
-    data["current"] = matches[0]
+    # An exact name always wins, even if it is also a prefix of another (e.g.
+    # 'prod' when both 'prod' and 'prod2' exist).
+    if name in data["instances"]:
+        chosen = name
+    else:
+        prefixed = [n for n in data["instances"] if n.startswith(name)]
+        if len(prefixed) != 1:
+            return None
+        chosen = prefixed[0]
+    data["current"] = chosen
     _write(data)
-    entry = data["instances"][matches[0]]
+    entry = data["instances"][chosen]
     return InstanceConfig(entry["start_url"], entry["region"])

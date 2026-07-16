@@ -36,18 +36,12 @@ def test_write_sso_cache_format_and_perms(monkeypatch, tmp_path):
     assert data["region"] == "us-east-1"
     assert data["accessToken"] == "the-token"
     assert data["expiresAt"].endswith("Z")
-    # refresh fields included when present
-    assert data["clientId"] == "cid"
-    assert data["refreshToken"] == "rt"
+    # The refresh token and client secret are deliberately NOT written to this
+    # plaintext file; grantry owns renewal from the keychain.
+    assert "refreshToken" not in data
+    assert "clientId" not in data
+    assert "clientSecret" not in data
     if POSIX:  # Windows does not use POSIX file modes
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
-
-
-def test_write_without_refresh_omits_client_fields(monkeypatch, tmp_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    session = Session("https://x.awsapps.com/start", "us-east-1", "tok", 1893456000.0)
-    write_sso_cache(session)
-    data = json.loads(sso_cache_path(session.start_url).read_text())
-    assert "clientId" not in data
-    assert data["accessToken"] == "tok"
+        # the cache directory is private too
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
