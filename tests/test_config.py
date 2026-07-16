@@ -1,6 +1,9 @@
 import stat
+import sys
 
 from grantry.config import grantry_home, state_path
+
+POSIX = not sys.platform.startswith("win")
 
 
 def test_home_honors_env(tmp_path, monkeypatch):
@@ -8,12 +11,15 @@ def test_home_honors_env(tmp_path, monkeypatch):
     home = grantry_home()
     assert home == tmp_path / "gh"
     assert home.is_dir()
-    assert stat.S_IMODE(home.stat().st_mode) == 0o700
+    if POSIX:  # Windows does not use POSIX directory modes
+        assert stat.S_IMODE(home.stat().st_mode) == 0o700
 
 
 def test_home_defaults_to_dot_grantry(tmp_path, monkeypatch):
     monkeypatch.delenv("GRANTRY_HOME", raising=False)
+    # Redirect the home dir on every OS: HOME for POSIX, USERPROFILE for Windows.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     assert grantry_home() == tmp_path / ".grantry"
 
 

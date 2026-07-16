@@ -1,13 +1,17 @@
 import hashlib
 import json
 import stat
+import sys
 
 from grantry.awscli_cache import sso_cache_path, write_sso_cache
 from grantry.providers.base import Session
 
+POSIX = not sys.platform.startswith("win")
+
 
 def test_cache_path_matches_aws_cli_key(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     url = "https://legalplans.awsapps.com/start"
     expected = hashlib.sha1(url.encode()).hexdigest() + ".json"
     assert sso_cache_path(url).name == expected
@@ -15,6 +19,7 @@ def test_cache_path_matches_aws_cli_key(monkeypatch, tmp_path):
 
 def test_write_sso_cache_format_and_perms(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     session = Session(
         "https://legalplans.awsapps.com/start", "us-east-1", "the-token", 1893456000.0,
         refresh_token="rt", client_id="cid", client_secret="csec",
@@ -29,11 +34,13 @@ def test_write_sso_cache_format_and_perms(monkeypatch, tmp_path):
     # refresh fields included when present
     assert data["clientId"] == "cid"
     assert data["refreshToken"] == "rt"
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if POSIX:  # Windows does not use POSIX file modes
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_write_without_refresh_omits_client_fields(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     session = Session("https://x.awsapps.com/start", "us-east-1", "tok", 1893456000.0)
     write_sso_cache(session)
     data = json.loads(sso_cache_path(session.start_url).read_text())

@@ -1,9 +1,12 @@
 import json
 import stat
+import sys
 
 from grantry.audit import AuditLog
 from grantry.identity import Identity
 from grantry.policy import Decision
+
+POSIX = not sys.platform.startswith("win")
 
 
 def test_record_and_read(tmp_path, monkeypatch):
@@ -39,8 +42,9 @@ def test_file_is_0600(tmp_path, monkeypatch):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     log = AuditLog()
     log.record("a", Identity("1", "p", "R"), Decision(True, "ok", "r", 60), at="t")
-    mode = stat.S_IMODE((tmp_path / "audit.jsonl").stat().st_mode)
-    assert mode == 0o600
+    if POSIX:  # Windows does not use POSIX file modes
+        mode = stat.S_IMODE((tmp_path / "audit.jsonl").stat().st_mode)
+        assert mode == 0o600
 
 
 def test_appends(tmp_path, monkeypatch):
