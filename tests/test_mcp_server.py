@@ -161,8 +161,13 @@ def test_request_login_rate_limits_concurrent_calls(tmp_path, monkeypatch):
             release.wait(timeout=5)  # hold the "login" open like a human deciding
             return Session(self.start_url, self.region, "tok", time.time() + 3600)
 
-    b = Broker(SlowProvider(), Policy.load(tmp_path / "policy.yaml"), AuditLog(),
-               SecretStore(), clock_iso=lambda: "t")
+    b = Broker(
+        SlowProvider(),
+        Policy.load(tmp_path / "policy.yaml"),
+        AuditLog(),
+        SecretStore(),
+        clock_iso=lambda: "t",
+    )
     state: dict[str, object] = {}
     first = handle_request_login(b, notify=lambda t, m: None, state=state)
     second = handle_request_login(b, notify=lambda t, m: None, state=state)
