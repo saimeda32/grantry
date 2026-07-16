@@ -45,7 +45,11 @@ class AwsProvider:
 
     def start_login(self, handler: InteractionHandler) -> Session:
         oidc = self._client_factory("sso-oidc", self.region)
-        reg = oidc.register_client(clientName="grantry", clientType="public")
+        # The sso:account:access scope makes the issuer return a refresh token,
+        # which lets grantry renew the access token later without a new login.
+        reg = oidc.register_client(
+            clientName="grantry", clientType="public", scopes=["sso:account:access"]
+        )
         auth = oidc.start_device_authorization(
             clientId=reg["clientId"],
             clientSecret=reg["clientSecret"],
@@ -82,6 +86,30 @@ class AwsProvider:
             region=self.region,
             access_token=token["accessToken"],
             expires_at=time.time() + int(token.get("expiresIn", 3600)),
+            refresh_token=token.get("refreshToken"),
+            client_id=reg["clientId"],
+            client_secret=reg["clientSecret"],
+        )
+
+    def refresh(self, session: Session) -> Session:
+        if not (session.refresh_token and session.client_id and session.client_secret):
+            raise ValueError("session has no refresh token; a new login is required")
+        oidc = self._client_factory("sso-oidc", session.region)
+        token = oidc.create_token(
+            clientId=session.client_id,
+            clientSecret=session.client_secret,
+            grantType="refresh_token",
+            refreshToken=session.refresh_token,
+        )
+        return Session(
+            start_url=session.start_url,
+            region=session.region,
+            access_token=token["accessToken"],
+            expires_at=time.time() + int(token.get("expiresIn", 3600)),
+            # The issuer may rotate the refresh token; keep the new one if given.
+            refresh_token=token.get("refreshToken", session.refresh_token),
+            client_id=session.client_id,
+            client_secret=session.client_secret,
         )
 
     def list_identities(self, session: Session) -> list[Identity]:

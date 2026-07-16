@@ -1,4 +1,3 @@
-import time
 
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
@@ -21,7 +20,26 @@ class FakeProvider:
         return "aws"
 
     def start_login(self, handler):
-        return Session(self.start_url, self.region, "tok", time.time() + 3600)
+        return Session(
+            self.start_url,
+            self.region,
+            "tok",
+            1000.0 + 3600,
+            refresh_token="rt",
+            client_id="c",
+            client_secret="s",
+        )
+
+    def refresh(self, session):
+        return Session(
+            self.start_url,
+            self.region,
+            "tok2",
+            1000.0 + 3600,
+            refresh_token="rt2",
+            client_id="c",
+            client_secret="s",
+        )
 
     def list_identities(self, session):
         return self._idents
@@ -128,3 +146,25 @@ def test_no_advisory_when_within_cap(tmp_path, monkeypatch):
     broker.login(H())
     res = broker.grant("prod/ReadOnlyAccess", requested_ttl=43200, caller="human")
     assert res.advisory is None
+
+
+def test_expired_session_auto_refreshes(tmp_path, monkeypatch):
+    # Clock is fixed at 1000; the session expires at 1000+3600. Advance the
+    # broker's clock past expiry and confirm cached_session renews via refresh.
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    (tmp_path / "policy.yaml").write_text(POLICY)
+    clock = {"n": 1000.0}
+    broker = Broker(
+        provider=FakeProvider(),
+        policy=Policy.load(tmp_path / "policy.yaml"),
+        audit=AuditLog(),
+        secrets=SecretStore(),
+        now=lambda: clock["n"],
+        clock_iso=lambda: "t",
+    )
+    broker.login(H())
+    clock["n"] = 1000.0 + 3600 + 1  # past expiry
+    s = broker.cached_session()
+    assert s is not None
+    assert s.access_token == "tok2"  # the refreshed token
+    assert s.refresh_token == "rt2"

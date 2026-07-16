@@ -58,6 +58,10 @@ class Broker:
 
     def login(self, handler: InteractionHandler) -> Session:
         session = self._provider.start_login(handler)
+        self._persist(session)
+        return session
+
+    def _persist(self, session: Session) -> None:
         self._secrets.put(
             token_name(self._start_url()),
             json.dumps(
@@ -66,24 +70,38 @@ class Broker:
                     "region": session.region,
                     "access_token": session.access_token,
                     "expires_at": session.expires_at,
+                    "refresh_token": session.refresh_token,
+                    "client_id": session.client_id,
+                    "client_secret": session.client_secret,
                 }
             ),
         )
-        return session
 
     def cached_session(self) -> Session | None:
         raw = self._secrets.get(token_name(self._start_url()))
         if not raw:
             return None
         data = json.loads(raw)
-        if data["expires_at"] <= self._now():
-            return None
-        return Session(
+        session = Session(
             start_url=data["start_url"],
             region=data["region"],
             access_token=data["access_token"],
             expires_at=data["expires_at"],
+            refresh_token=data.get("refresh_token"),
+            client_id=data.get("client_id"),
+            client_secret=data.get("client_secret"),
         )
+        if session.expires_at > self._now():
+            return session
+        # Expired: renew silently if we have a refresh token, else require login.
+        if session.refresh_token:
+            try:
+                renewed = self._provider.refresh(session)
+            except Exception:
+                return None
+            self._persist(renewed)
+            return renewed
+        return None
 
     def identities(self) -> list[Identity]:
         session = self.cached_session()

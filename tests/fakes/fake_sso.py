@@ -29,7 +29,11 @@ def _make_handler(state: _State):
 
         def do_POST(self):  # noqa: N802
             length = int(self.headers.get("Content-Length", 0))
-            _ = self.rfile.read(length)
+            body_bytes = self.rfile.read(length)
+            try:
+                body = json.loads(body_bytes) if body_bytes else {}
+            except json.JSONDecodeError:
+                body = {}
             path = self.path
             if path.endswith("/client/register"):
                 self._send(
@@ -54,6 +58,18 @@ def _make_handler(state: _State):
                     },
                 )
             elif path.endswith("/token"):
+                if body.get("grantType") == "refresh_token":
+                    # Renewal: return a fresh access token and rotate the refresh token.
+                    self._send(
+                        200,
+                        {
+                            "accessToken": "refreshed-access-token",
+                            "tokenType": "Bearer",
+                            "expiresIn": 3600,
+                            "refreshToken": "refresh-token-v2",
+                        },
+                    )
+                    return
                 state.token_polls += 1
                 if state.token_polls < 2:
                     self._send(
@@ -68,6 +84,7 @@ def _make_handler(state: _State):
                             "accessToken": "sso-access-token-value",
                             "tokenType": "Bearer",
                             "expiresIn": 3600,
+                            "refreshToken": "refresh-token-v1",
                         },
                     )
             else:

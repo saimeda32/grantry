@@ -55,3 +55,9 @@ def test_device_flow_then_mint():
         creds = provider.mint(session, prod_ro, ttl=900)
         assert creds.access_key_id == "AKIAFAKE"
         assert creds.session_token == "faketoken"
+
+        # The login carried a refresh token; refreshing yields a new access token.
+        assert session.refresh_token == "refresh-token-v1"
+        renewed = provider.refresh(session)
+        assert renewed.access_token == "refreshed-access-token"
+        assert renewed.refresh_token == "refresh-token-v2"

@@ -14,6 +14,12 @@ class Session:
     region: str
     access_token: str
     expires_at: float
+    # Present when the issuer returned a refresh token and a client
+    # registration, which together let grantry renew the access token without a
+    # new browser login. None on providers or logins that do not support it.
+    refresh_token: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -35,5 +41,6 @@ class Provider(Protocol):
 
     def name(self) -> str: ...
     def start_login(self, handler: InteractionHandler) -> Session: ...
+    def refresh(self, session: Session) -> Session: ...
     def list_identities(self, session: Session) -> list[Identity]: ...
     def mint(self, session: Session, ident: Identity, ttl: int) -> Credentials: ...

@@ -19,6 +19,9 @@ class FakeProvider:
     def start_login(self, handler):
         return Session(self.start_url, self.region, "tok", time.time() + 3600)
 
+    def refresh(self, session):
+        return session
+
     def list_identities(self, session):
         return [
             Identity("111122223333", "prod", "ReadOnlyAccess"),
