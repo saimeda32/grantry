@@ -96,6 +96,13 @@ def _instance(args: argparse.Namespace) -> tuple[str, str]:
     cfg = load_config()
     start = start or cfg.start_url
     region = region or cfg.region
+    # If we have one half and a terminal, ask for the other rather than failing
+    # a first login just because one flag was forgotten.
+    if sys.stdin.isatty():
+        if start and not region:
+            region = input("SSO region (e.g. us-east-1): ").strip() or None
+        elif region and not start:
+            start = input("Identity Center start URL: ").strip() or None
     if start and region:
         save_instance(start, region)
         return start, region
@@ -147,7 +154,7 @@ def _run(argv: list[str] | None = None) -> int:
     sub.add_parser("version", help="print the grantry version")
     sub.add_parser("instances", help="list remembered Identity Center instances")
     p_use = sub.add_parser("use", help="switch the current instance by name or prefix")
-    p_use.add_argument("name")
+    p_use.add_argument("name", nargs="?", default=None)
     sub.add_parser("ls", parents=[inst])
     p_audit = sub.add_parser("audit", help="print or visualize the grant history")
     p_audit.add_argument("--visualize", action="store_true", help="write an HTML timeline instead")
@@ -159,7 +166,7 @@ def _run(argv: list[str] | None = None) -> int:
     p_graph.add_argument("--caller", choices=["agent", "human"], default="agent")
     p_graph.add_argument("-o", "--out", default="grantry-access.html")
     p_run = sub.add_parser("run", parents=[inst], help="run a command as an identity")
-    p_run.add_argument("identity")
+    p_run.add_argument("identity", nargs="?", default=None)
     p_run.add_argument("--ttl", default=default_ttl)
     p_run.add_argument("cmd", nargs=argparse.REMAINDER)
     p_switch = sub.add_parser(
@@ -241,7 +248,7 @@ def _run(argv: list[str] | None = None) -> int:
     p_completion = sub.add_parser(
         "completion", help="print a shell completion script (bash, zsh, or fish)"
     )
-    p_completion.add_argument("shell", choices=SHELLS)
+    p_completion.add_argument("shell", nargs="?", choices=SHELLS, default=None)
     # Internal: feeds identity names to the completion scripts. Reads a cache, so
     # it is instant and never touches the network. Omitting help keeps it out of
     # the help listing, and metavar keeps it out of the usage line.
@@ -259,7 +266,13 @@ def _run(argv: list[str] | None = None) -> int:
     if args.command == "completion":
         from grantry.completion import completion_script
 
-        print(completion_script(args.shell), end="")
+        shell = args.shell or os.path.basename(os.environ.get("SHELL", ""))
+        if shell not in SHELLS:
+            print(
+                f"Could not detect your shell. Pass one of: {', '.join(SHELLS)}.", file=sys.stderr
+            )
+            return 2
+        print(completion_script(shell), end="")
         return 0
 
     if args.command == "_complete-identities":
@@ -282,11 +295,22 @@ def _run(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "use":
-        from grantry.instance import use_instance
+        from grantry.instance import list_instances, use_instance
+        from grantry.pick import choose
 
-        chosen = use_instance(args.name)
+        target: str | None = args.name
+        if target is None:
+            rows = list_instances()
+            if not rows:
+                print("No instances remembered yet. Run 'grantry login' first.")
+                return 1
+            target = choose([n for n, _cfg, _cur in rows])
+            if target is None:
+                print("No instance chosen.")
+                return 1
+        chosen = use_instance(target)
         if chosen is None:
-            print(f"No single instance matches {args.name!r}. See 'grantry instances'.")
+            print(f"No single instance matches {target!r}. See 'grantry instances'.")
             return 1
         print(f"Now using {chosen.start_url} ({chosen.region}).")
         return 0
@@ -343,6 +367,10 @@ def _run(argv: list[str] | None = None) -> int:
         print("The native 'aws' CLI, boto3, and Terraform can use this session too.")
         if skip_populate:
             print("Run 'grantry populate' to write matching ~/.aws/config profiles.")
+        print(
+            "Next: 'grantry ls' to see your roles, then 'grantry run <id> -- <cmd>', "
+            "'grantry console', or 'grantry switch'."
+        )
         return 0
 
     if args.command == "logout":
@@ -405,6 +433,9 @@ def _run(argv: list[str] | None = None) -> int:
 
     if args.command == "admin":
         if args.admin_command == "assignments":
+            if sum([args.snapshot, args.diff, args.visualize]) > 1:
+                print("Pick only one of --snapshot, --diff, or --visualize.")
+                return 2
             return _cmd_admin_assignments(
                 broker,
                 region,
@@ -601,7 +632,12 @@ def _human_credentials(
         print("Run 'grantry check' to diagnose your session and access.")
         return 1, None
     if result.credentials is None:
-        print(f"Denied: {result.decision.reason}")
+        reason = result.decision.reason
+        print(f"Denied: {reason}")
+        if "unknown identity" in reason:
+            print("See 'grantry ls' for valid identities (they look like account/role).")
+        else:
+            print("This is blocked by your policy. Review it with 'grantry status'.")
         return 1, None
     if result.advisory:
         print(f"note: {result.advisory}", file=sys.stderr)
@@ -686,12 +722,16 @@ def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: st
     return 0
 
 
-def _cmd_run(broker: Broker, region: str, ident_key: str, ttl: str, cmd: list[str]) -> int:
+def _cmd_run(broker: Broker, region: str, ident_key: str | None, ttl: str, cmd: list[str]) -> int:
     # argparse REMAINDER keeps a leading "--"; drop it.
     if cmd and cmd[0] == "--":
         cmd = cmd[1:]
+    if ident_key is None:
+        print("Usage: grantry run <identity> -- <command>")
+        print("See 'grantry ls' for identities, or 'grantry switch' to pick one interactively.")
+        return 2
     if not cmd:
-        print("Nothing to run. Usage: grantry run <identity> -- <command>")
+        print(f"Nothing to run. Usage: grantry run {ident_key} -- <command>")
         return 2
     code, creds = _human_credentials(broker, ident_key, ttl)
     if code != 0 or creds is None:
@@ -967,6 +1007,16 @@ def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
             fh.write("\n")
         print(f"Added grantry to {client.label} ({path}). Restart {client.label} to load it.")
         changed += 1
+    if changed and not dry_run:
+        policy = state_path("policy.yaml")
+        print()
+        if not policy.exists():
+            print("Agents are denied by default until you set a policy. Run 'grantry init', then")
+            print("edit it to allow the accounts and roles they may use.")
+        else:
+            print(f"Agents follow the policy at {policy}. Edit it to change what they may use.")
+        print("If the agent also has a shell, set GRANTRY_CALLER=agent in its environment and run")
+        print("'grantry check --sandbox' inside it so the policy is a real boundary.")
     if not start_url:
         print(
             "\nNote: no Identity Center instance saved yet. Run "

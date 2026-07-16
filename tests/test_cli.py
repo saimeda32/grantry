@@ -258,6 +258,56 @@ def test_credential_process_agent_env_is_denied(tmp_path, monkeypatch, capsys):
     assert "Denied" in err
 
 
+def test_run_dot_profile_name_resolves(tmp_path, monkeypatch, capfd):
+    # A name copied from ~/.aws/config (account.role, dot form) must resolve to
+    # the same identity as the account/role slash form.
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_run(
+        b,
+        "us-east-1",
+        "prod.ReadOnlyAccess",  # profile-name form, not prod/ReadOnlyAccess
+        "1h",
+        ["--", "python", "-c", "import os;print(os.environ['AWS_ACCESS_KEY_ID'])"],
+    )
+    out = capfd.readouterr().out
+    assert code == 0
+    assert "AKIA" in out
+
+
+def test_run_without_identity_gives_clean_message(tmp_path, monkeypatch, capsys):
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_run(b, "us-east-1", None, "1h", ["--", "true"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "grantry ls" in out and "grantry switch" in out
+
+
+def test_unknown_identity_error_points_to_ls(tmp_path, monkeypatch, capsys):
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_run(b, "us-east-1", "nope/Nope", "1h", ["--", "true"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "grantry ls" in out
+
+
+def test_completion_infers_shell_from_env(monkeypatch, capsys):
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+    rc = main(["completion"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "compdef _grantry_complete grantry" in out
+
+
+def test_admin_conflicting_modes_rejected(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
+    monkeypatch.setenv("GRANTRY_SSO_START_URL", "https://acme.awsapps.com/start")
+    monkeypatch.setenv("GRANTRY_SSO_REGION", "us-east-1")
+    rc = main(["admin", "assignments", "--as", "x/y", "--snapshot", "--diff"])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "only one" in out.lower()
+
+
 def test_switch_prints_exports(tmp_path, monkeypatch, capsys):
     b = _fake_broker(tmp_path, monkeypatch)
     code = _cmd_switch(b, "us-east-1", "prod/ReadOnlyAccess", "1h")

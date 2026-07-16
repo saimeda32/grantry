@@ -263,9 +263,23 @@ class Broker:
         )
 
     def _find(self, session: Session, ident_key: str) -> Identity | None:
-        return next(
-            (i for i in self._provider.list_identities(session) if i.key == ident_key), None
-        )
+        from grantry.humanops import safe_profile_name
+
+        idents = self._provider.list_identities(session)
+        # Exact "account/role" match first.
+        for i in idents:
+            if i.key == ident_key:
+                return i
+        # Also accept the "account.role" profile-name form that 'populate' writes
+        # to ~/.aws/config, case-insensitively, so a name copied from either
+        # 'grantry ls' or the AWS config resolves to the same identity.
+        wanted = ident_key.lower()
+        for i in idents:
+            if i.key.lower() == wanted:
+                return i
+            if safe_profile_name(i.account_name, i.role_name).lower() == wanted:
+                return i
+        return None
 
 
 def _split_key(key: str) -> tuple[str, str]:

@@ -4,6 +4,24 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.0] - 2026-07-16
+
+### Changed
+- Stop making you repeat what grantry already knows, from a UX sweep:
+  - Identities now resolve from the `account.role` profile-name form too (what
+    `populate` writes to `~/.aws/config`), not only the `account/role` form, so a
+    name copied from either place works.
+  - `admin assignments --as` is optional and opens the identity picker; `use` and
+    `completion` are the same (pick an instance, infer the shell from `$SHELL`).
+  - `--start-url` / `--region` no longer clutter every subcommand's help, and a
+    first login with only one of them prompts for the other instead of exiting.
+  - `grantry install` now tells you agents are denied until you write a policy and
+    to set `GRANTRY_CALLER=agent`; login points to `ls`/`run`/`console`/`switch`.
+  - "unknown identity" and policy denials now name the next command to run, and a
+    bare `grantry run` prints usage instead of a raw argparse error.
+  - `admin assignments` rejects more than one of `--snapshot`/`--diff`/`--visualize`
+    instead of silently ignoring the extras.
+
 ## [0.7.0] - 2026-07-16
 
 ### Security
@@ -124,6 +142,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.8.0]: https://github.com/saimeda32/grantry/releases/tag/v0.8.0
 [0.7.0]: https://github.com/saimeda32/grantry/releases/tag/v0.7.0
 [0.6.0]: https://github.com/saimeda32/grantry/releases/tag/v0.6.0
 [0.5.0]: https://github.com/saimeda32/grantry/releases/tag/v0.5.0

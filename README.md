@@ -73,11 +73,12 @@ grantry login --start-url https://your-org.awsapps.com/start --region us-east-1
 # 2. See what you can reach.
 grantry ls
 
-# 3. Generate a starter policy from your real access, then edit it.
-grantry init
-
-# 4. Run any command as a role.
+# 3. Run any command as a role. That is all you need as a human.
 grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls
+
+# 4. Optional: only when you want AI agents to use grantry, write a policy
+#    that decides which roles they may assume, then edit it.
+grantry init
 ```
 
 `grantry login` also writes matching profiles into `~/.aws/config` for every
