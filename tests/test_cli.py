@@ -197,3 +197,29 @@ def test_uninstall_removes_grantry(tmp_path, monkeypatch):
     written = json.loads(cfg.read_text())
     assert "grantry" not in written["mcpServers"]
     assert "other" in written["mcpServers"]
+
+
+def test_credential_process_outputs_json(tmp_path, monkeypatch, capsys):
+    import json
+
+    from grantry.cli import _cmd_credential_process
+
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_credential_process(b, "prod/ReadOnlyAccess", "1h", "human")
+    out = capsys.readouterr().out
+    assert code == 0
+    data = json.loads(out)
+    assert data["Version"] == 1
+    assert data["AccessKeyId"] == "AKIA"
+
+
+def test_credential_process_denied_to_stderr(tmp_path, monkeypatch, capsys):
+    from grantry.cli import _cmd_credential_process
+
+    b = _fake_broker(tmp_path, monkeypatch)
+    # agent caller with a policy that only allows humans by default -> denied
+    code = _cmd_credential_process(b, "prod/ReadOnlyAccess", "1h", "agent")
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""  # nothing on stdout on failure
+    assert "denied" in captured.err.lower()

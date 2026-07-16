@@ -116,3 +116,17 @@ def test_strip_profiles_keeps_next_sections_comments():
     assert "[profile managed.Role]" not in out
     assert "# comment for the hand-written profile below" in out
     assert "[profile hand]" in out
+
+
+def test_credential_process_json_shape():
+    import json
+
+    from grantry.humanops import credential_process_json
+
+    creds = Credentials("AKIA", "sec", "sess", 1893456000.0)
+    out = json.loads(credential_process_json(creds))
+    assert out["Version"] == 1
+    assert out["AccessKeyId"] == "AKIA"
+    assert out["SecretAccessKey"] == "sec"
+    assert out["SessionToken"] == "sess"
+    assert out["Expiration"].endswith("Z")

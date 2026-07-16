@@ -122,6 +122,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_switch.add_argument("identity")
     p_switch.add_argument("--ttl", default="1h")
+    p_credproc = sub.add_parser(
+        "credential-process",
+        parents=[inst],
+        help="emit credentials as JSON for an AWS config credential_process entry",
+    )
+    p_credproc.add_argument("--identity", required=True)
+    p_credproc.add_argument("--ttl", default="1h")
+    p_credproc.add_argument(
+        "--caller",
+        choices=["human", "agent"],
+        default="human",
+        help="policy class to evaluate as (default human)",
+    )
     p_pop = sub.add_parser(
         "populate", parents=[inst], help="write ~/.aws/config profiles for your access"
     )
@@ -251,6 +264,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "switch":
         return _cmd_switch(broker, region, args.identity, args.ttl)
 
+    if args.command == "credential-process":
+        return _cmd_credential_process(broker, args.identity, args.ttl, args.caller)
+
     if args.command == "populate":
         return _cmd_populate(broker, start, region, args.workload_region, args.dry_run)
 
@@ -374,9 +390,11 @@ def _cmd_init(broker: Broker, force: bool) -> int:
     return 0
 
 
-def _human_credentials(broker: Broker, ident_key: str, ttl: str) -> tuple[int, object]:
-    """Grant an identity as a human. Returns (exit_code, credentials_or_None).
-    exit_code is 0 on success, non-zero with a printed reason otherwise.
+def _human_credentials(
+    broker: Broker, ident_key: str, ttl: str, caller: str = "human"
+) -> tuple[int, object]:
+    """Grant an identity. Returns (exit_code, credentials_or_None). exit_code is
+    0 on success, non-zero with a printed reason otherwise.
     """
     from grantry.ttl import parse_ttl
 
@@ -386,7 +404,7 @@ def _human_credentials(broker: Broker, ident_key: str, ttl: str) -> tuple[int, o
         print(f"Invalid ttl: {e}")
         return 2, None
     try:
-        result = broker.grant(ident_key, seconds, caller="human")
+        result = broker.grant(ident_key, seconds, caller=caller)
     except NoSessionError:
         print("No active session. Run 'grantry login' first.")
         return 1, None
@@ -400,6 +418,35 @@ def _human_credentials(broker: Broker, ident_key: str, ttl: str) -> tuple[int, o
     if result.advisory:
         print(f"note: {result.advisory}", file=sys.stderr)
     return 0, result.credentials
+
+
+def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: str) -> int:
+    # The AWS SDK spec: on success print the credential JSON to stdout and exit
+    # 0; on failure print a human message to stderr and exit non-zero. Nothing
+    # but the JSON may go to stdout, so all messages here use stderr.
+    from grantry.humanops import credential_process_json
+    from grantry.providers.base import Credentials
+    from grantry.ttl import parse_ttl
+
+    try:
+        seconds = parse_ttl(ttl)
+    except ValueError as e:
+        print(f"Invalid ttl: {e}", file=sys.stderr)
+        return 2
+    try:
+        result = broker.grant(ident_key, seconds, caller=caller)
+    except NoSessionError:
+        print("No active grantry session. Run 'grantry login' first.", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"grantry could not get credentials: {e}", file=sys.stderr)
+        return 1
+    if result.credentials is None:
+        print(f"Denied by policy: {result.decision.reason}", file=sys.stderr)
+        return 1
+    assert isinstance(result.credentials, Credentials)
+    print(credential_process_json(result.credentials))
+    return 0
 
 
 def _cmd_run(broker: Broker, region: str, ident_key: str, ttl: str, cmd: list[str]) -> int:

@@ -28,6 +28,26 @@ def safe_profile_name(account_name: str, role_name: str) -> str:
     return f"{acct or 'account'}.{role or 'role'}"
 
 
+def credential_process_json(creds: Credentials) -> str:
+    """Render credentials in the exact JSON shape AWS SDKs expect from a
+    credential_process command, so a profile with
+    `credential_process = grantry credential-process --identity X` sources its
+    credentials through grantry (and every mint is audited).
+    """
+    import json
+
+    expires = datetime.fromtimestamp(creds.expiration, tz=timezone.utc)
+    return json.dumps(
+        {
+            "Version": 1,
+            "AccessKeyId": creds.access_key_id,
+            "SecretAccessKey": creds.secret_access_key,
+            "SessionToken": creds.session_token,
+            "Expiration": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+    )
+
+
 def env_from_credentials(creds: Credentials, region: str) -> dict[str, str]:
     """Build the AWS_* environment a subprocess or subshell needs to act as an
     identity. AWS_CREDENTIALS_EXPIRATION is ISO-8601 so SDKs refresh correctly.
