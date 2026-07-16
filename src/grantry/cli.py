@@ -449,8 +449,9 @@ def _cmd_init(broker: Broker, force: bool) -> int:
     text = scaffold_policy(idents, _iso_now()[:10])
     path.write_text(text)
     print(f"Wrote a starter policy from your {len(idents)} identities to {path}.")
-    print("Review it, then agents you allow can request credentials. Custom roles are")
-    print("listed there and denied to agents until you add an allow rule for them.")
+    print("Heads up: this starter is PERMISSIVE. Agents may use any role you can.")
+    print(f"To restrict them, edit {path} and replace the '*/*' allow with the")
+    print("specific accounts and roles they should have. Your identities are listed there.")
     return 0
 
 
