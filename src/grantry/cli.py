@@ -135,6 +135,15 @@ def main(argv: list[str] | None = None) -> int:
         default="human",
         help="policy class to evaluate as (default human)",
     )
+    p_console = sub.add_parser(
+        "console", parents=[inst], help="open the AWS console in a browser as an identity"
+    )
+    p_console.add_argument("identity")
+    p_console.add_argument("--ttl", default="1h")
+    p_console.add_argument("--destination", default=None, help="a console URL to land on")
+    p_console.add_argument(
+        "--print", dest="print_url", action="store_true", help="print the URL instead of opening"
+    )
     p_pop = sub.add_parser(
         "populate", parents=[inst], help="write ~/.aws/config profiles for your access"
     )
@@ -266,6 +275,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "credential-process":
         return _cmd_credential_process(broker, args.identity, args.ttl, args.caller)
+
+    if args.command == "console":
+        return _cmd_console(broker, args.identity, args.ttl, args.destination, args.print_url)
 
     if args.command == "populate":
         return _cmd_populate(broker, start, region, args.workload_region, args.dry_run)
@@ -418,6 +430,31 @@ def _human_credentials(
     if result.advisory:
         print(f"note: {result.advisory}", file=sys.stderr)
     return 0, result.credentials
+
+
+def _cmd_console(
+    broker: Broker, ident_key: str, ttl: str, destination: str | None, print_url: bool
+) -> int:
+    import webbrowser
+
+    from grantry.console import build_console_url
+    from grantry.providers.base import Credentials
+
+    code, creds = _human_credentials(broker, ident_key, ttl)
+    if code != 0 or creds is None:
+        return code
+    assert isinstance(creds, Credentials)
+    try:
+        url = build_console_url(creds, destination) if destination else build_console_url(creds)
+    except Exception as e:
+        print(f"Could not build the console sign-in URL: {e}")
+        return 1
+    if print_url:
+        print(url)
+        return 0
+    print(f"Opening the AWS console as {ident_key} in your browser.")
+    webbrowser.open(url)
+    return 0
 
 
 def _cmd_credential_process(broker: Broker, ident_key: str, ttl: str, caller: str) -> int:
