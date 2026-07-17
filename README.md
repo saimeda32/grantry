@@ -228,15 +228,33 @@ is the permission set session duration, set by an admin in IAM Identity Center.
 ## Admin: see who has what across the org
 
 ```bash
-grantry admin assignments --as your-mgmt/AWSAdministratorAccess --visualize
+grantry admin assignments --visualize        # omit --as to pick the admin role
 ```
 
-This crawls the whole organization and writes an interactive graph of
-principals, permission sets, and accounts, with the links between them. It is
-safe to offer because AWS is the gatekeeper: only an identity that can assume a
-management or delegated admin role gets any data. The crawl caches principal
-names and uses retry hardening, so it handles organizations with thousands of
-assignments.
+This crawls the whole organization and writes an interactive, self-contained
+HTML graph of principals, permission sets, and accounts, with the links between
+them. It is safe to offer because AWS is the gatekeeper: only an identity that
+can assume a management or delegated admin role gets any data. The crawl caches
+principal names and uses retry hardening, so it handles organizations with
+thousands of assignments.
+
+The graph is built for an access review, not just a picture:
+
+- **Privilege at a glance** — permission sets are coloured by level (admin,
+  power, developer, read-only), and **production accounts are flagged from their
+  AWS Organizations `Environment` tag** (falling back to the account name only
+  when there is no tag, and saying so when it guesses).
+- **Risk KPIs** — admin grants, admin-in-production, and principals with admin.
+- **Filter** by privilege level or to production accounts only; **search** any
+  principal, permission set, or account; toggle a **table view**.
+- **Click any node** to trace its full access. A group expands to its **members**;
+  a permission set shows its **session duration, managed policies, and inline
+  policy**; an account shows its **Organizational Unit**.
+- **Export** the assignments as CSV or the graph as SVG. Scroll to zoom, drag to
+  pan.
+
+Use `--snapshot` to save a crawl and `--diff` to see what changed since the last
+one.
 
 ## How your data is stored
 
