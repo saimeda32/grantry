@@ -305,9 +305,9 @@ it finds any, so you can wire it into a sandbox startup check. And
 
 ## Roadmap
 
-grantry v1 covers AWS Identity Center. The provider layer is written so Azure
-and GCP can be added without touching the engine, policy, audit, or MCP
-surface. Team mode (shared, signed policy) comes after that.
+grantry covers AWS IAM Identity Center today. Next up is making the policy gate a
+real boundary through sandbox isolation, deeper access review, more clouds
+(Azure, then GCP), and team mode. See [ROADMAP.md](ROADMAP.md) for the full plan.
 
 ## Contributing
 
