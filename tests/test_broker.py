@@ -125,6 +125,17 @@ def test_unknown_identity_denied(tmp_path, monkeypatch):
     assert res.credentials is None
 
 
+def test_grant_resolves_spaced_account_name(tmp_path, monkeypatch):
+    # An account whose AWS name has spaces is referenced by its quote-free key,
+    # but pasting the raw spaced name must resolve to the same identity too.
+    broker = build(tmp_path, monkeypatch)
+    broker._provider._idents = [Identity("444455556666", "Acme Corp Account", "ReadOnlyAccess")]
+    broker.login(H())
+    for key in ("Acme-Corp-Account/ReadOnlyAccess", "Acme Corp Account/ReadOnlyAccess"):
+        res = broker.grant(key, requested_ttl=900, caller="human")
+        assert res.credentials is not None, key
+
+
 def test_advisory_when_aws_outlives_cap(tmp_path, monkeypatch):
     # now=1000, policy caps agents to 15m, AWS returns a 1h credential.
     broker = build(tmp_path, monkeypatch)

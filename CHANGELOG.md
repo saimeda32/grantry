@@ -4,6 +4,26 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.11.0] - 2026-07-17
+
+### Changed
+- Identity keys are now shell-safe: spaces in an account or role name collapse to
+  hyphens, so an account named "Acme Corp Account" shows and resolves as
+  `Acme-Corp-Account/AWSReadOnlyAccess` and no longer needs quoting on the command
+  line. Lookups still accept the raw spaced name, so pasting a name from the AWS
+  console keeps working.
+- Commands that need a session but find none now log you in automatically instead
+  of stopping with "Run 'grantry login' first". This applies to `ls`, `run`,
+  `switch`, `console`, `populate`, `graph`, `init`, `admin`, and
+  `credential-process`. In a non-interactive context (no terminal, such as an SDK
+  calling `credential-process` or CI) it still reports the missing session on
+  stderr rather than opening a browser.
+
+### Fixed
+- Fixed "Export SVG" on the access graph producing an all-black image. The
+  exported file now carries its own colors and an opaque background, so it renders
+  the same as the on-screen graph in any viewer.
+
 ## [0.10.6] - 2026-07-17
 
 ### Added

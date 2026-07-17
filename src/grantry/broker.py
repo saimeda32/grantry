@@ -264,6 +264,7 @@ class Broker:
 
     def _find(self, session: Session, ident_key: str) -> Identity | None:
         from grantry.humanops import safe_profile_name
+        from grantry.identity import shell_safe
 
         idents = self._provider.list_identities(session)
         # Exact "account/role" match first.
@@ -271,11 +272,14 @@ class Broker:
             if i.key == ident_key:
                 return i
         # Also accept the "account.role" profile-name form that 'populate' writes
-        # to ~/.aws/config, case-insensitively, so a name copied from either
-        # 'grantry ls' or the AWS config resolves to the same identity.
+        # to ~/.aws/config, and the raw spaced name a user might paste from the
+        # AWS console, case-insensitively. i.key is already shell-safe (spaces
+        # collapsed to hyphens), so we shell-safe the input before comparing;
+        # that way "Acme Corp/Admin" and "Acme-Corp/Admin" both resolve.
         wanted = ident_key.lower()
+        safe_wanted = shell_safe(ident_key).lower()
         for i in idents:
-            if i.key.lower() == wanted:
+            if i.key.lower() in (wanted, safe_wanted):
                 return i
             if safe_profile_name(i.account_name, i.role_name).lower() == wanted:
                 return i

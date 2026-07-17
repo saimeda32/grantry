@@ -842,7 +842,27 @@ bCsv.addEventListener("click", () => {
 bSvg.addEventListener("click", () => {
   const clone = svg.cloneNode(true);
   clone.setAttribute("xmlns", SVGNS);
-  download("grantry-access-graph.svg", "image/svg+xml", new XMLSerializer().serializeToString(clone));
+  clone.setAttribute("width", W); clone.setAttribute("height", H);
+  clone.removeAttribute("style");
+  // A standalone SVG loses the page's stylesheet, so its CSS variables and class
+  // rules vanish and every mark falls back to SVG's default black fill: a black
+  // rectangle. Flatten the resolved presentation styles from the live nodes onto
+  // the clone so the file carries its own colours.
+  const PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity",
+    "stroke-dasharray", "stroke-linecap", "opacity", "font-family", "font-size",
+    "font-weight", "text-anchor", "dominant-baseline"];
+  const live = svg.querySelectorAll("*"), copy = clone.querySelectorAll("*");
+  for (let i = 0; i < live.length; i++) {
+    const c = getComputedStyle(live[i]);
+    let s = "";
+    for (const p of PROPS) { const v = c.getPropertyValue(p); if (v && v !== "none" || p === "fill") s += p + ":" + v + ";"; }
+    copy[i].setAttribute("style", s);
+  }
+  // Opaque background matching the current theme, so the export is not transparent.
+  const bg = getComputedStyle(document.body).backgroundColor || "#ffffff";
+  clone.insertBefore(el("rect", { x: 0, y: 0, width: W, height: H, fill: bg }), clone.firstChild);
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
+  download("grantry-access-graph.svg", "image/svg+xml", xml);
 });
 
 // ---- enrichment: crawl provenance, group members, permission-set details, OU ----

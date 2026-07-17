@@ -108,6 +108,55 @@ def build_broker(start_url: str, region: str) -> Broker:
     )
 
 
+def _ensure_session(broker: Broker) -> bool:
+    """Make sure a usable session exists, logging in first when it does not.
+
+    Returns True once a session is available (already cached or freshly obtained),
+    False if a login was needed but could not run. A command should just do its
+    work when this returns True. Login progress goes to stderr so it never
+    corrupts machine-readable stdout (e.g. credential-process JSON).
+
+    Auto-login only happens at a terminal: in a non-interactive context (an SDK
+    calling credential-process, CI, a piped script) a browser flow would hang, so
+    there we keep the old clear message and let the caller exit.
+    """
+    try:
+        if broker.cached_session() is not None:
+            return True
+    except Exception:
+        # A transient refresh failure. Fall through and attempt a fresh login
+        # rather than treating a network blip as "no session".
+        pass
+    if not sys.stdin.isatty():
+        print("No active session. Run 'grantry login' first.", file=sys.stderr)
+        return False
+    print("No active session, logging you in first...", file=sys.stderr)
+    try:
+        session = broker.login(TerminalHandler())
+    except KeyboardInterrupt:
+        print("Login cancelled.", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Login failed: {e}", file=sys.stderr)
+        return False
+    print(f"Logged in to {session.start_url}.", file=sys.stderr)
+    # Warm the identity cache so the command that follows (and TAB completion)
+    # has names to work with. Best effort: never fail a login over it.
+    with contextlib.suppress(Exception):
+        broker.identities()
+    return True
+
+
+# Commands that cannot do anything without a session. They are routed through
+# _ensure_session so a missing login triggers one instead of dead-ending. login,
+# logout, mcp, and the offline commands (version, completion, install, ...) are
+# deliberately absent: they manage their own session or need none. check/status
+# are diagnostics and report "no session" as a finding rather than logging in.
+_SESSION_COMMANDS = frozenset(
+    {"ls", "run", "switch", "console", "credential-process", "populate", "graph", "init", "admin"}
+)
+
+
 def _instance(args: argparse.Namespace) -> tuple[str, str]:
     # Resolution order: CLI flag, then env var, then the instance saved on a
     # previous run. You provide it once (flag or env); grantry remembers it.
@@ -459,6 +508,21 @@ def _run(argv: list[str] | None = None) -> int:
         print("Logged out." if had else "No active session to clear.")
         return 0
 
+    # Pure argument validation runs before the session gate, so a usage mistake
+    # is reported as such (exit 2) rather than triggering a login first.
+    if (
+        args.command == "admin"
+        and args.admin_command == "assignments"
+        and sum([args.snapshot, args.diff, args.visualize]) > 1
+    ):
+        print("Pick only one of --snapshot, --diff, or --visualize.")
+        return 2
+
+    # A command that needs a session but has none logs the user in first, rather
+    # than making them run 'grantry login' as a separate step.
+    if args.command in _SESSION_COMMANDS and not _ensure_session(broker):
+        return 1
+
     if args.command == "ls":
         try:
             idents = broker.identities()
@@ -509,9 +573,6 @@ def _run(argv: list[str] | None = None) -> int:
 
     if args.command == "admin":
         if args.admin_command == "assignments":
-            if sum([args.snapshot, args.diff, args.visualize]) > 1:
-                print("Pick only one of --snapshot, --diff, or --visualize.")
-                return 2
             return _cmd_admin_assignments(
                 broker,
                 region,

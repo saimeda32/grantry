@@ -23,9 +23,12 @@ def test_main_ls_without_session_reports_cleanly(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GRANTRY_SSO_START_URL", "https://example.awsapps.com/start")
     monkeypatch.setenv("GRANTRY_SSO_REGION", "us-east-1")
     rc = main(["ls"])
-    out = capsys.readouterr().out
+    # Non-interactive (no TTY): grantry cannot run a browser login, so it reports
+    # the missing session on stderr and exits non-zero instead of hanging. At a
+    # real terminal this path triggers an automatic login instead.
+    err = capsys.readouterr().err
     assert rc == 1
-    assert "login" in out.lower()
+    assert "login" in err.lower()
 
 
 def test_instance_is_remembered_after_first_use(tmp_path, monkeypatch):

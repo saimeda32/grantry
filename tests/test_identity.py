@@ -1,4 +1,4 @@
-from grantry.identity import Identity, matches
+from grantry.identity import Identity, matches, shell_safe
 
 
 def ident(acct="prod", role="ReadOnlyAccess", aid="111122223333"):
@@ -7,6 +7,25 @@ def ident(acct="prod", role="ReadOnlyAccess", aid="111122223333"):
 
 def test_key():
     assert ident("dev", "Admin").key == "dev/Admin"
+
+
+def test_shell_safe_collapses_whitespace():
+    assert shell_safe("Acme Corp Account") == "Acme-Corp-Account"
+    assert shell_safe("  padded  name  ") == "padded-name"
+    assert shell_safe("tab\tseparated") == "tab-separated"
+    assert shell_safe("already-fine") == "already-fine"
+
+
+def test_key_has_no_spaces():
+    # An account name with spaces must produce a quote-free identity key.
+    assert ident("Acme Corp Account", "Admin Access").key == "Acme-Corp-Account/Admin-Access"
+
+
+def test_spaced_name_matches_hyphenated_pattern():
+    # A policy written against the displayed (hyphenated) name matches the
+    # identity whose raw account name still carries spaces.
+    assert matches("Acme-Corp-Account/*", ident("Acme Corp Account", "ReadOnlyAccess"))
+    assert matches("*/Admin-Access", ident("prod", "Admin Access"))
 
 
 def test_exact_match():
