@@ -234,9 +234,16 @@ is the permission set session duration, set by an admin in IAM Identity Center.
 grantry admin assignments --visualize        # omit --as to pick the admin role
 ```
 
+![Organization access graph](docs/access-graph.png)
+
 This crawls the whole organization and writes an interactive, self-contained
 HTML graph of principals, permission sets, and accounts, with the links between
-them. It is safe to offer because AWS is the gatekeeper: only an identity that
+them.
+
+Click any node to trace its access; a group shows its members, a permission set
+its policies, an account its OU:
+
+![Navigating the access graph](docs/access-graph.gif) It is safe to offer because AWS is the gatekeeper: only an identity that
 can assume a management or delegated admin role gets any data. The crawl caches
 principal names and uses retry hardening, so it handles organizations with
 thousands of assignments.

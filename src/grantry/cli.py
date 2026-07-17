@@ -147,6 +147,13 @@ def _instance(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Die quietly when a downstream reader closes the pipe (e.g. `grantry ... |
+    # head`, or `source <(grantry completion zsh)`), like a normal Unix tool,
+    # instead of dumping a BrokenPipeError traceback. No-op on Windows.
+    import signal
+
+    with contextlib.suppress(AttributeError, ValueError, OSError):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     # Turn a Ctrl-C into a clean message and the conventional 130 exit code,
     # instead of dumping a Python traceback the user did not ask to see.
     try:

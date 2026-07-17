@@ -154,6 +154,19 @@ grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls</pre>
 
 <section>
   <div class="wrap">
+    <h2>See who has what across the org</h2>
+    <p><code>grantry admin assignments --visualize</code> crawls the whole
+    organization and writes one self-contained HTML file: principals &rarr;
+    permission sets &rarr; accounts, colour-coded by privilege, with risk KPIs.
+    Click any node to trace its access; a group shows its members, a permission
+    set its policies, an account its OU.</p>
+    <img src="access-graph.gif" alt="Navigating the grantry access graph"
+         style="width:100%; border:1px solid var(--line); border-radius:12px; margin-top:8px;">
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <h2>Wire it into your AI clients</h2>
 <pre>grantry install            <span class="c"># auto detect every client you have</span>
 grantry install cursor     <span class="c"># or a specific one</span></pre>

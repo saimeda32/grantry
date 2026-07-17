@@ -4,6 +4,17 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.5] - 2026-07-17
+
+### Fixed
+- No longer prints a `BrokenPipeError` traceback when output is piped to a reader
+  that closes early (e.g. `grantry ... | head`, or `source <(grantry completion
+  zsh)`); grantry now exits quietly on SIGPIPE like a normal Unix tool.
+
+### Documentation
+- Added a screenshot and an interactive navigation GIF of the access graph to the
+  README and the project site, and the terminal demo now shows TAB completion.
+
 ## [0.10.4] - 2026-07-16
 
 ### Changed
@@ -241,6 +252,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.10.5]: https://github.com/saimeda32/grantry/releases/tag/v0.10.5
 [0.10.4]: https://github.com/saimeda32/grantry/releases/tag/v0.10.4
 [0.10.3]: https://github.com/saimeda32/grantry/releases/tag/v0.10.3
 [0.10.2]: https://github.com/saimeda32/grantry/releases/tag/v0.10.2
