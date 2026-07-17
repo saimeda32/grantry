@@ -4,6 +4,14 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.3] - 2026-07-16
+
+### Added
+- Accept the aws-familiar `--profile` (and `--identity`, `--as`) flags wherever
+  grantry takes an identity: `switch`, `console`, `credential-process`, and
+  `admin assignments`. `run` takes the `account.role` profile-name form
+  positionally (`grantry run prod.ReadOnlyAccess -- ...`).
+
 ## [0.8.2] - 2026-07-16
 
 ### Changed
@@ -158,6 +166,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.8.3]: https://github.com/saimeda32/grantry/releases/tag/v0.8.3
 [0.8.2]: https://github.com/saimeda32/grantry/releases/tag/v0.8.2
 [0.8.1]: https://github.com/saimeda32/grantry/releases/tag/v0.8.1
 [0.8.0]: https://github.com/saimeda32/grantry/releases/tag/v0.8.0

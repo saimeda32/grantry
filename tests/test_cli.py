@@ -274,6 +274,15 @@ def test_run_dot_profile_name_resolves(tmp_path, monkeypatch, capfd):
     assert "AKIA" in out
 
 
+def test_switch_accepts_profile_flag(tmp_path, monkeypatch, capsys):
+    # aws-style --profile (and the dot profile-name form) resolve the identity.
+    b = _fake_broker(tmp_path, monkeypatch)
+    code = _cmd_switch(b, "us-east-1", "prod.ReadOnlyAccess", "1h")
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "export AWS_ACCESS_KEY_ID=AKIA" in out
+
+
 def test_run_without_identity_gives_clean_message(tmp_path, monkeypatch, capsys):
     b = _fake_broker(tmp_path, monkeypatch)
     code = _cmd_run(b, "us-east-1", None, "1h", ["--", "true"])

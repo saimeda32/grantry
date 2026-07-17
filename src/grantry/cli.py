@@ -185,6 +185,10 @@ def _run(argv: list[str] | None = None) -> int:
     p_graph.add_argument("--caller", choices=["agent", "human"], default="agent")
     p_graph.add_argument("-o", "--out", default="grantry-access.html")
     p_run = sub.add_parser("run", parents=[inst], help="run a command as an identity")
+    # No --identity flag here: run uses REMAINDER for the command, and an optional
+    # positional would steal the first command token. The positional identity
+    # already accepts the account.role profile-name form, so 'grantry run
+    # prod.ReadOnlyAccess -- ...' works like the aws profile name.
     p_run.add_argument("identity", nargs="?", default=None)
     p_run.add_argument("--ttl", default=default_ttl)
     p_run.add_argument("cmd", nargs=argparse.REMAINDER)
@@ -192,13 +196,14 @@ def _run(argv: list[str] | None = None) -> int:
         "switch", parents=[inst], help="print shell exports to adopt an identity"
     )
     p_switch.add_argument("identity", nargs="?", help="omit to pick interactively")
+    p_switch.add_argument("--identity", "--profile", "--as", dest="identity_opt", default=None)
     p_switch.add_argument("--ttl", default=default_ttl)
     p_credproc = sub.add_parser(
         "credential-process",
         parents=[inst],
         help="emit credentials as JSON for an AWS config credential_process entry",
     )
-    p_credproc.add_argument("--identity", required=True)
+    p_credproc.add_argument("--identity", "--profile", "--as", dest="identity", required=True)
     p_credproc.add_argument("--ttl", default=default_ttl)
     p_credproc.add_argument(
         "--caller",
@@ -210,6 +215,7 @@ def _run(argv: list[str] | None = None) -> int:
         "console", parents=[inst], help="open the AWS console in a browser as an identity"
     )
     p_console.add_argument("identity", nargs="?", help="omit to pick interactively")
+    p_console.add_argument("--identity", "--profile", "--as", dest="identity_opt", default=None)
     p_console.add_argument("--ttl", default=default_ttl)
     p_console.add_argument("--destination", default=None, help="a console URL to land on")
     p_console.add_argument(
@@ -240,6 +246,8 @@ def _run(argv: list[str] | None = None) -> int:
     p_assign = admin_sub.add_parser("assignments", help="crawl who-has-what across the org")
     p_assign.add_argument(
         "--as",
+        "--identity",
+        "--profile",
         dest="as_identity",
         default=None,
         help="admin identity to crawl with, as account/role; omit to pick interactively",
@@ -421,7 +429,7 @@ def _run(argv: list[str] | None = None) -> int:
         return _cmd_run(broker, region, args.identity, args.ttl, args.cmd)
 
     if args.command == "switch":
-        ident = _resolve_identity(broker, args.identity)
+        ident = _resolve_identity(broker, args.identity_opt or args.identity)
         if ident is None:
             return 1
         return _cmd_switch(broker, region, ident, args.ttl)
@@ -430,7 +438,7 @@ def _run(argv: list[str] | None = None) -> int:
         return _cmd_credential_process(broker, args.identity, args.ttl, args.caller)
 
     if args.command == "console":
-        ident = _resolve_identity(broker, args.identity)
+        ident = _resolve_identity(broker, args.identity_opt or args.identity)
         if ident is None:
             return 1
         return _cmd_console(broker, ident, args.ttl, args.destination, args.print_url)
