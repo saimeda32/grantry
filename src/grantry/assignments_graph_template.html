@@ -212,7 +212,7 @@
 <body>
 <header>
   <h1>Organization Access Graph</h1>
-  <p>Who can reach what: principals → permission sets → AWS accounts. Source: <code>grantry admin assignments</code>, snapshot <span id="snapshot-date">/*DATE*/</span>.</p>
+  <p>Who can reach what: principals → permission sets → AWS accounts. Source: <code>grantry admin assignments</code>, snapshot <span id="snapshot-date">/*DATE*/</span><span id="crawled-as"></span>.</p>
 </header>
 
 <div class="kpis" id="kpis"></div>
@@ -251,7 +251,11 @@
 
 <script>
 const DATA = /*DATA*/[];
-// rows: [principal_type, principal_name, permission_set, account_id, account_name]
+// rows: [principal_type, principal_name, permission_set, account_id, account_name, account_env]
+const MEMBERS = /*MEMBERS*/{};    // group display name -> [member user names]
+const PSET_META = /*PSET_META*/{}; // permission set name -> {session_duration, managed:[], inline, description}
+const ACCT_OU = /*ACCT_OU*/{};    // account name -> Organizational Unit name
+const CRAWLED_AS = "/*CRAWLED_AS*/"; // the identity the crawl ran as
 
 const ADMIN_PS = /Administrator|OrganizationsFullAccess|SuperAdmin/;
 
@@ -901,6 +905,63 @@ svg.addEventListener("click", ev => { if (suppressClick) { ev.stopImmediatePropa
 bReset.addEventListener("click", () => { vb.x = 0; vb.y = 0; vb.w = W; vb.h = H; setVB(); });
 const zh = document.createElement("div"); zh.id = "zoomhint"; zh.textContent = "scroll to zoom · drag to pan";
 document.getElementById("graphview").append(zh);
+
+// ---- enrichment: crawl provenance, group members, permission-set details, OU ----
+if (CRAWLED_AS) {
+  document.getElementById("crawled-as").textContent = ", crawled as " + CRAWLED_AS;
+}
+function fmtDur(iso) {
+  if (!iso) return "";
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso);
+  if (!m) return iso;
+  return [(m[1] ? m[1] + "h" : ""), (m[2] ? m[2] + "m" : "")].join(" ").trim() || iso;
+}
+// Add enrichment facts to the hover tooltip.
+const _origTipRows = tipRows;
+tipRows = function (n) {
+  const rows = _origTipRows(n);
+  if (n.kind === "P" && n.type === "GROUP" && MEMBERS[n.name]) rows.push(["Members", String(MEMBERS[n.name].length)]);
+  if (n.kind === "S" && PSET_META[n.name] && PSET_META[n.name].session_duration) rows.push(["Session", fmtDur(PSET_META[n.name].session_duration)]);
+  if (n.kind === "A") {
+    const env = ACCT_ENV.get(n.name);
+    if (env) rows.push(["Environment", env === "prod" ? "production (tag)" : env]);
+    if (ACCT_OU[n.name]) rows.push(["OU", ACCT_OU[n.name]]);
+  }
+  return rows;
+};
+// Add richer enrichment sections to the details panel.
+const _origRenderPanel = renderPanel;
+renderPanel = function (n) {
+  _origRenderPanel(n);
+  if (n.kind === "M") return;
+  const panel = document.getElementById("panel");
+  const note = panel.querySelector(".jump-note");
+  const addH3 = (txt) => { const h = document.createElement("h3"); h.textContent = txt; return h; };
+  if (n.kind === "P" && n.type === "GROUP" && MEMBERS[n.name] && MEMBERS[n.name].length) {
+    const h = addH3("Members (" + MEMBERS[n.name].length + ")");
+    const ul = document.createElement("ul"); ul.style.setProperty("--target-dot", "var(--c-principal)");
+    for (const u of MEMBERS[n.name]) { const li = document.createElement("li"); li.textContent = u; ul.append(li); }
+    panel.insertBefore(h, note); panel.insertBefore(ul, note);
+  }
+  if (n.kind === "S" && PSET_META[n.name]) {
+    const m = PSET_META[n.name];
+    const h = addH3("Permission set grants");
+    const ul = document.createElement("ul"); ul.style.setProperty("--target-dot", "var(--c-pset)");
+    if (m.session_duration) { const li = document.createElement("li"); li.textContent = "Session up to " + fmtDur(m.session_duration); ul.append(li); }
+    for (const p of (m.managed || [])) { const li = document.createElement("li"); li.textContent = p + " (AWS managed)"; ul.append(li); }
+    if (m.inline) { const li = document.createElement("li"); li.textContent = "Custom inline policy"; ul.append(li); }
+    if (!ul.children.length) { const li = document.createElement("li"); li.textContent = "No policy details available"; ul.append(li); }
+    panel.insertBefore(h, note); panel.insertBefore(ul, note);
+  }
+  if (n.kind === "A" && (ACCT_OU[n.name] || ACCT_ENV.get(n.name))) {
+    const h = addH3("Account");
+    const ul = document.createElement("ul"); ul.style.setProperty("--target-dot", "var(--c-account)");
+    const env = ACCT_ENV.get(n.name);
+    if (env) { const li = document.createElement("li"); li.textContent = env === "prod" ? "Production (from tag)" : "Environment: " + env; ul.append(li); }
+    if (ACCT_OU[n.name]) { const li = document.createElement("li"); li.textContent = "OU: " + ACCT_OU[n.name]; ul.append(li); }
+    panel.insertBefore(h, note); panel.insertBefore(ul, note);
+  }
+};
 </script>
 </body>
 </html>

@@ -249,8 +249,10 @@ def _run(argv: list[str] | None = None) -> int:
         "--identity",
         "--profile",
         dest="as_identity",
+        nargs="?",
+        const=None,
         default=None,
-        help="admin identity to crawl with, as account/role; omit to pick interactively",
+        help="admin identity to crawl with, as account/role; omit the value to pick interactively",
     )
     p_assign.add_argument("--ttl", default=default_ttl)
     p_assign.add_argument("--visualize", action="store_true")
@@ -556,9 +558,19 @@ def _cmd_admin_assignments(
         return 0
 
     if visualize:
+        from grantry.admin import crawl_enrichment
         from grantry.render import render_assignments
 
-        html = render_assignments(assignments, _iso_now()[:10])
+        # Gather the extra context (group members, permission-set details, OUs).
+        # Best effort: if it fails or is partial, the graph still renders.
+        enrichment = None
+        try:
+            enrichment = crawl_enrichment(make_client, assignments)
+        except Exception:
+            enrichment = None
+        html = render_assignments(
+            assignments, _iso_now()[:10], enrichment=enrichment, crawled_as=ident
+        )
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(html)
         print(f"Wrote {len(assignments)} assignments to {_file_link(out)}")

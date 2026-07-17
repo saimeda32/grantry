@@ -8,7 +8,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from grantry.admin import Assignment
+from grantry.admin import Assignment, Enrichment
 from grantry.graphdata import AccessSurface
 
 _STYLE = """
@@ -118,11 +118,17 @@ def _escape_for_script(serialized: str) -> str:
     return out
 
 
-def render_assignments(assignments: list[Assignment], generated_on: str) -> str:
+def render_assignments(
+    assignments: list[Assignment],
+    generated_on: str,
+    enrichment: Enrichment | None = None,
+    crawled_as: str | None = None,
+) -> str:
     """Render the interactive node-link access graph: principals -> permission
     sets -> accounts with connecting lines, hover, click-to-trace, search, and a
     table view. Self-contained (no external requests). The proven template is
-    bundled as package data; here we only inject the rows and date.
+    bundled as package data; here we inject the rows, date, and optional
+    enrichment (group members, permission-set details, account OUs).
     """
     import json
     import pkgutil
@@ -138,7 +144,13 @@ def render_assignments(assignments: list[Assignment], generated_on: str) -> str:
         ]
         for a in assignments
     ]
-    data = _escape_for_script(json.dumps(rows, separators=(",", ":")))
+
+    def inject_json(obj: Any) -> str:
+        return _escape_for_script(json.dumps(obj, separators=(",", ":")))
+
+    members = enrichment.group_members if enrichment else {}
+    psets = enrichment.permission_sets if enrichment else {}
+    account_ou = enrichment.account_ou if enrichment else {}
 
     raw = pkgutil.get_data(__package__, _GRAPH_TEMPLATE)
     if raw is None:
@@ -146,7 +158,17 @@ def render_assignments(assignments: list[Assignment], generated_on: str) -> str:
     template = raw.decode("utf-8")
     if "/*DATA*/" not in template:
         raise RuntimeError("graph template is missing its data placeholder")
-    html = template.replace("const DATA = /*DATA*/[];", "const DATA = " + data + ";")
+    html = template.replace("const DATA = /*DATA*/[];", "const DATA = " + inject_json(rows) + ";")
+    html = html.replace(
+        "const MEMBERS = /*MEMBERS*/{};", "const MEMBERS = " + inject_json(members) + ";"
+    )
+    html = html.replace(
+        "const PSET_META = /*PSET_META*/{};", "const PSET_META = " + inject_json(psets) + ";"
+    )
+    html = html.replace(
+        "const ACCT_OU = /*ACCT_OU*/{};", "const ACCT_OU = " + inject_json(account_ou) + ";"
+    )
+    html = html.replace("/*CRAWLED_AS*/", _escape_for_script(crawled_as or ""))
     html = html.replace("/*DATE*/", generated_on)
     return html
 

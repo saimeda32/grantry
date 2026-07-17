@@ -34,6 +34,17 @@ class Assignment:
     account_env: str = ""  # "prod" / "nonprod" from account tags, "" if unknown
 
 
+@dataclass(frozen=True)
+class Enrichment:
+    """Optional extra context for the visualization, gathered with more AWS calls.
+    Every field is best-effort: a missing permission just leaves it empty.
+    """
+
+    group_members: dict[str, list[str]]  # group display name -> member user names
+    permission_sets: dict[str, dict[str, Any]]  # ps name -> details (policies, session, ...)
+    account_ou: dict[str, str]  # account name -> Organizational Unit name
+
+
 def _account_env(orgs: Any, account_id: str) -> str | None:
     """Classify an account from its Organizations tags. Returns 'prod' or
     'nonprod' when an environment tag is present, '' when the account has no such
@@ -163,3 +174,105 @@ def crawl_assignments(
         if on_progress:
             on_progress(done, total_accounts)
     return out
+
+
+def crawl_enrichment(make_client: ClientFactory, assignments: list[Assignment]) -> Enrichment:
+    """Gather optional extra context for the visualization: who is in each group,
+    what each permission set actually grants, and each account's OU. Every part is
+    best-effort; a missing permission simply leaves that part empty. Runs only for
+    the interactive graph, so the extra API calls do not slow snapshots or diffs.
+    """
+    sso = make_client("sso-admin")
+    idstore = make_client("identitystore")
+    orgs = make_client("organizations")
+
+    instances = sso.list_instances().get("Instances", [])
+    if not instances:
+        return Enrichment({}, {}, {})
+    instance_arn = instances[0]["InstanceArn"]
+    id_store = instances[0]["IdentityStoreId"]
+    name_cache: dict[tuple[str, str], str] = {}
+
+    # Group memberships: expand each group to the users in it.
+    group_members: dict[str, list[str]] = {}
+    groups = {
+        (a.principal_id, a.principal_name) for a in assignments if a.principal_type == "GROUP"
+    }
+    for gid, gname in groups:
+        try:
+            members = []
+            for m in _paginate(
+                idstore.list_group_memberships,
+                "GroupMemberships",
+                IdentityStoreId=id_store,
+                GroupId=gid,
+            ):
+                uid = m.get("MemberId", {}).get("UserId")
+                if uid:
+                    members.append(_principal_name(idstore, id_store, "USER", uid, name_cache))
+            group_members[gname] = sorted(set(members))
+        except Exception:
+            continue
+
+    # Permission-set details: session duration and the policies each one attaches.
+    used_ps = {a.permission_set_name for a in assignments}
+    permission_sets: dict[str, dict[str, Any]] = {}
+    try:
+        for ps_arn in _paginate(
+            sso.list_permission_sets, "PermissionSets", InstanceArn=instance_arn
+        ):
+            d = sso.describe_permission_set(InstanceArn=instance_arn, PermissionSetArn=ps_arn)[
+                "PermissionSet"
+            ]
+            name = d.get("Name", "")
+            if name not in used_ps:
+                continue
+            managed: list[str] = []
+            try:
+                for p in _paginate(
+                    sso.list_managed_policies_in_permission_set,
+                    "AttachedManagedPolicies",
+                    InstanceArn=instance_arn,
+                    PermissionSetArn=ps_arn,
+                ):
+                    managed.append(str(p.get("Name", "")))
+            except Exception:
+                pass
+            inline = False
+            try:
+                resp = sso.get_inline_policy_for_permission_set(
+                    InstanceArn=instance_arn, PermissionSetArn=ps_arn
+                )
+                inline = bool(resp.get("InlinePolicy"))
+            except Exception:
+                pass
+            permission_sets[name] = {
+                "session_duration": str(d.get("SessionDuration", "")),
+                "description": str(d.get("Description", "")),
+                "managed": managed,
+                "inline": inline,
+            }
+    except Exception:
+        pass
+
+    # Account OU: which Organizational Unit each account sits in.
+    account_ou: dict[str, str] = {}
+    ou_names: dict[str, str] = {}
+    for aid, aname in {(a.account_id, a.account_name) for a in assignments}:
+        try:
+            parents = orgs.list_parents(ChildId=aid).get("Parents", [])
+            if not parents:
+                continue
+            parent = parents[0]
+            if parent.get("Type") == "ROOT":
+                account_ou[aname] = "Root"
+            elif parent.get("Type") == "ORGANIZATIONAL_UNIT":
+                ouid = parent["Id"]
+                if ouid not in ou_names:
+                    ou = orgs.describe_organizational_unit(OrganizationalUnitId=ouid)
+                    ou_names[ouid] = str(ou.get("OrganizationalUnit", {}).get("Name", ouid))
+                account_ou[aname] = ou_names[ouid]
+        except Exception:
+            continue
+
+    return Enrichment(group_members, permission_sets, account_ou)

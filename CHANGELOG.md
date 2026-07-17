@@ -4,6 +4,18 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.0] - 2026-07-16
+
+### Added
+- The org access graph now gathers extra context during `--visualize` (best
+  effort; a missing permission just leaves that part out):
+  - **Group membership** — selecting a group lists the users in it.
+  - **Permission-set details** — selecting a permission set shows its session
+    duration, attached AWS managed policies, and whether it has an inline policy.
+  - **Account OU** — each account shows its Organizational Unit, and its
+    environment from the tag when known.
+  - **Provenance** — the header records the identity the crawl ran as.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added
@@ -190,6 +202,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.10.0]: https://github.com/saimeda32/grantry/releases/tag/v0.10.0
 [0.9.0]: https://github.com/saimeda32/grantry/releases/tag/v0.9.0
 [0.8.4]: https://github.com/saimeda32/grantry/releases/tag/v0.8.4
 [0.8.3]: https://github.com/saimeda32/grantry/releases/tag/v0.8.3

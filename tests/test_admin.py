@@ -125,6 +125,80 @@ def test_crawl_falls_back_when_tags_unavailable():
     assert all(a.account_env == "" for a in assignments)
 
 
+class FakeSSOEnrich(FakeSSOAdmin):
+    def describe_permission_set(self, InstanceArn, PermissionSetArn):  # noqa: N803
+        d = super().describe_permission_set(InstanceArn, PermissionSetArn)
+        d["PermissionSet"]["SessionDuration"] = "PT12H"
+        return d
+
+    def list_managed_policies_in_permission_set(
+        self, InstanceArn, PermissionSetArn, NextToken=None
+    ):  # noqa: N803
+        m = {"ps-a": [{"Name": "ReadOnlyAccess"}], "ps-b": [{"Name": "AdministratorAccess"}]}
+        return {"AttachedManagedPolicies": m.get(PermissionSetArn, [])}
+
+    def get_inline_policy_for_permission_set(self, InstanceArn, PermissionSetArn):  # noqa: N803
+        return {"InlinePolicy": "{...}" if PermissionSetArn == "ps-b" else ""}
+
+
+class FakeIDEnrich(FakeIdentityStore):
+    def list_group_memberships(self, IdentityStoreId, GroupId, NextToken=None):  # noqa: N803
+        return {"GroupMemberships": [{"MemberId": {"UserId": "u-1"}}]}
+
+
+class FakeOrgsEnrich(FakeOrgs):
+    def list_parents(self, ChildId, NextToken=None):  # noqa: N803
+        return {"Parents": [{"Id": "ou-1", "Type": "ORGANIZATIONAL_UNIT"}]}
+
+    def describe_organizational_unit(self, OrganizationalUnitId):  # noqa: N803
+        return {"OrganizationalUnit": {"Name": "Workloads"}}
+
+
+def test_crawl_enrichment_gathers_members_psets_and_ous():
+    from grantry.admin import Assignment, crawl_enrichment
+
+    clients = {
+        "sso-admin": FakeSSOEnrich(),
+        "identitystore": FakeIDEnrich(),
+        "organizations": FakeOrgsEnrich(),
+    }
+    assignments = [
+        Assignment("GROUP", "g-1", "Platform", "AWSAdministratorAccess", "111", "acme-prod"),
+        Assignment("USER", "u-9", "casey", "AWSReadOnlyAccess", "111", "acme-prod"),
+    ]
+    e = crawl_enrichment(lambda n: clients[n], assignments)
+    assert e.group_members["Platform"] == ["someone"]  # member u-1 -> describe_user
+    assert e.permission_sets["AWSAdministratorAccess"]["session_duration"] == "PT12H"
+    assert "AdministratorAccess" in e.permission_sets["AWSAdministratorAccess"]["managed"]
+    assert e.permission_sets["AWSAdministratorAccess"]["inline"] is True
+    assert e.account_ou["acme-prod"] == "Workloads"
+
+
+def test_render_injects_enrichment_and_provenance():
+    from grantry.admin import Assignment, Enrichment
+
+    e = Enrichment(
+        group_members={"Platform": ["casey"]},
+        permission_sets={
+            "AWSAdministratorAccess": {
+                "session_duration": "PT12H",
+                "managed": ["AdministratorAccess"],
+                "inline": True,
+                "description": "",
+            }
+        },
+        account_ou={"acme-prod": "Workloads"},
+    )
+    rows = [
+        Assignment("GROUP", "g1", "Platform", "AWSAdministratorAccess", "111", "acme-prod", "prod")
+    ]
+    html = render_assignments(rows, "2026-07-16", enrichment=e, crawled_as="acme-mgmt/AWSAdmin")
+    assert "/*MEMBERS*/" not in html and "const MEMBERS = " in html
+    assert "Workloads" in html
+    assert "acme-mgmt/AWSAdmin" in html
+    assert "PT12H" in html
+
+
 def test_no_instances_returns_empty():
     class NoInst:
         def list_instances(self):
