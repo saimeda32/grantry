@@ -131,6 +131,15 @@ def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
     assert "dev-pay/AWSPowerUserAccess" in keys
 
 
+def test_login_shows_completion_tip_once(tmp_path, monkeypatch, capsys):
+    _login_env(tmp_path, monkeypatch)
+    main(["login", "--force-refresh"])
+    assert "grantry completion --install" in capsys.readouterr().out
+    # a later login does not repeat the tip
+    main(["login", "--force-refresh"])
+    assert "grantry completion --install" not in capsys.readouterr().out
+
+
 def test_login_populates_aws_config(tmp_path, monkeypatch, capsys):
     _login_env(tmp_path, monkeypatch)
     rc = main(["login"])

@@ -4,6 +4,13 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.6] - 2026-07-17
+
+### Added
+- After your first `grantry login`, grantry suggests running
+  `grantry completion --install` to turn on TAB completion, shown once. pip and
+  pipx cannot set up completion at install time, so this is the nudge.
+
 ## [0.10.5] - 2026-07-17
 
 ### Fixed
@@ -252,6 +259,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.10.6]: https://github.com/saimeda32/grantry/releases/tag/v0.10.6
 [0.10.5]: https://github.com/saimeda32/grantry/releases/tag/v0.10.5
 [0.10.4]: https://github.com/saimeda32/grantry/releases/tag/v0.10.4
 [0.10.3]: https://github.com/saimeda32/grantry/releases/tag/v0.10.3

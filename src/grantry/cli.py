@@ -440,6 +440,13 @@ def _run(argv: list[str] | None = None) -> int:
             "Next: 'grantry ls' to see your roles, then 'grantry run <id> -- <cmd>', "
             "'grantry console', or 'grantry switch'."
         )
+        # pip/pipx cannot set up shell completion at install time, so nudge once
+        # here (the first login) rather than nag on every command.
+        hint = state_path(".completion-hint-shown")
+        if not hint.exists():
+            print("Tip: run 'grantry completion --install' to enable TAB completion.")
+            with contextlib.suppress(OSError):
+                hint.touch()
         return 0
 
     if args.command == "logout":
