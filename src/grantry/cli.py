@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 from grantry.audit import AuditLog
 from grantry.broker import Broker, NoSessionError
@@ -32,6 +32,25 @@ from grantry.policy import Policy
 from grantry.providers.aws import AwsProvider
 from grantry.providers.base import InteractionHandler
 from grantry.secrets import SecretStore
+
+
+class _Parser(argparse.ArgumentParser):
+    """An argparse parser that suggests the closest command when one is
+    misspelled, e.g. 'grantry admin assigments' -> "Did you mean 'assignments'?".
+    Sub-parsers inherit this class, so the hint works at every level.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        import difflib
+        import re
+
+        m = re.search(r"invalid choice: '([^']+)' \(choose from (.+)\)", message)
+        if m:
+            choices = re.findall(r"'([^']+)'", m.group(2))
+            near = difflib.get_close_matches(m.group(1), choices, n=1)
+            if near:
+                message = f"{message}\nDid you mean '{near[0]}'?"
+        super().error(message)
 
 
 def _iso_now() -> str:
@@ -143,7 +162,7 @@ def _run(argv: list[str] | None = None) -> int:
 
     app_cfg = load_config()
     default_ttl = app_cfg.ttl
-    parser = argparse.ArgumentParser(prog="grantry")
+    parser = _Parser(prog="grantry")
     parser.add_argument("-v", "--verbose", action="count", default=0)
     # Support the conventional --version/-V flag in addition to the 'version'
     # subcommand, since that is what people reflexively type.
@@ -156,7 +175,7 @@ def _run(argv: list[str] | None = None) -> int:
     # before the subcommand, so both orders work. help=SUPPRESS keeps these off
     # every subcommand's help: grantry remembers the instance after the first
     # login, so there is no reason to advertise them on ls, admin, run, and so on.
-    inst = argparse.ArgumentParser(add_help=False)
+    inst = _Parser(add_help=False)
     inst.add_argument("--start-url", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     inst.add_argument("--region", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True, metavar="<command>")

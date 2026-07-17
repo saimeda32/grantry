@@ -387,6 +387,22 @@ def test_version_command(capsys):
     assert out.startswith("grantry ")
 
 
+def test_did_you_mean_misspelled_top_level_command(capsys):
+    import pytest
+
+    with pytest.raises(SystemExit):
+        main(["swich"])
+    assert "Did you mean 'switch'" in capsys.readouterr().err
+
+
+def test_did_you_mean_misspelled_subcommand(capsys):
+    import pytest
+
+    with pytest.raises(SystemExit):
+        main(["admin", "assigments"])
+    assert "Did you mean 'assignments'" in capsys.readouterr().err
+
+
 def test_version_flag(capsys):
     import pytest
 
