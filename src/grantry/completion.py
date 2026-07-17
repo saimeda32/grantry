@@ -26,14 +26,17 @@ _grantry_complete() {{
         COMPREPLY=( $(compgen -W "{subs}" -- "$cur") )
         return
     fi
+    # An identity flag anywhere (e.g. admin assignments --as, credential-process
+    # --identity, run --profile) completes to your identities.
+    case "$prev" in
+        --as|--identity|--profile)
+            COMPREPLY=( $(compgen -W "$(grantry _complete-identities 2>/dev/null)" -- "$cur") )
+            return
+            ;;
+    esac
     case "$sub" in
         run|switch|console)
             if [ "$COMP_CWORD" -eq 2 ]; then
-                COMPREPLY=( $(compgen -W "$(grantry _complete-identities 2>/dev/null)" -- "$cur") )
-            fi
-            ;;
-        credential-process)
-            if [ "$prev" = "--identity" ]; then
                 COMPREPLY=( $(compgen -W "$(grantry _complete-identities 2>/dev/null)" -- "$cur") )
             fi
             ;;
@@ -53,13 +56,16 @@ _grantry_complete() {{
         compadd -- $subs
         return
     fi
+    # An identity flag anywhere completes to your identities.
+    case "${{words[CURRENT-1]}}" in
+        --as|--identity|--profile)
+            compadd -- ${{(f)"$(grantry _complete-identities 2>/dev/null)"}}
+            return
+            ;;
+    esac
     case "${{words[2]}}" in
         run|switch|console)
             (( CURRENT == 3 )) && compadd -- ${{(f)"$(grantry _complete-identities 2>/dev/null)"}}
-            ;;
-        credential-process)
-            [[ "${{words[CURRENT-1]}}" == "--identity" ]] && \\
-                compadd -- ${{(f)"$(grantry _complete-identities 2>/dev/null)"}}
             ;;
         completion)
             compadd bash zsh fish
@@ -76,8 +82,10 @@ _FISH = (
     "complete -c grantry -f\n"
     'complete -c grantry -n __fish_use_subcommand -a "{subs}"\n'
     'complete -c grantry -n "__fish_seen_subcommand_from run switch console" -a "(__grantry_ids)"\n'
-    'complete -c grantry -n "__fish_seen_subcommand_from credential-process" -l identity'
-    ' -a "(__grantry_ids)"\n'
+    # An identity flag anywhere completes to your identities.
+    'complete -c grantry -l as -a "(__grantry_ids)"\n'
+    'complete -c grantry -l identity -a "(__grantry_ids)"\n'
+    'complete -c grantry -l profile -a "(__grantry_ids)"\n'
     'complete -c grantry -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"\n'
 )
 

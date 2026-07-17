@@ -110,23 +110,24 @@ a sandboxed agent: give the sandbox only a `credential_process` profile with
 
 ### Tab-complete your identities
 
-You do not have to type `account/role` by hand. Turn on shell completion once and
-TAB fills in your real identities for `run`, `switch`, `console`, and
-`credential-process`:
+You do not have to type `account/role` by hand. `pipx` and `pip` cannot set up
+shell completion for you, so grantry does it in one command:
 
 ```bash
-# bash: add to ~/.bashrc
-source <(grantry completion bash)
-# zsh: add to ~/.zshrc
-source <(grantry completion zsh)
-# fish: add to ~/.config/fish/config.fish
-grantry completion fish | source
+grantry completion --install     # detects your shell, adds it to your rc file
+exec $SHELL                       # or restart your terminal
 ```
 
-Completion reads a local cache of your identities, so pressing TAB never waits on
-the network. The cache refreshes whenever you run `grantry ls`. You can also skip
-typing entirely: `grantry switch` and `grantry console` with no identity open an
-interactive picker.
+Then TAB fills in your identities for `run`, `switch`, `console`, and after
+`--as` / `--identity` / `--profile`. To wire it up by hand instead, source the
+script from your rc file: `source <(grantry completion zsh)` (or `bash`), or
+`grantry completion fish | source`.
+
+Shell completion is prefix-based, so it matches on the account name first. For
+"type a few letters, anywhere in the name" filtering, use the picker: run a
+command with no identity (for example `grantry switch` or
+`grantry admin assignments --visualize`) and type to narrow the list. The cache
+completion reads refreshes whenever you run `grantry ls`.
 
 ### Optional defaults
 

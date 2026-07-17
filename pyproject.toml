@@ -1,6 +1,6 @@
 [project]
 name = "grantry"
-version = "0.10.0"
+version = "0.10.1"
 description = "Local credential broker for humans and AI agents, AWS-first"
 readme = "README.md"
 requires-python = ">=3.10"

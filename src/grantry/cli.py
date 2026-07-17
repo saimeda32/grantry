@@ -278,6 +278,9 @@ def _run(argv: list[str] | None = None) -> int:
         "completion", help="print a shell completion script (bash, zsh, or fish)"
     )
     p_completion.add_argument("shell", nargs="?", choices=SHELLS, default=None)
+    p_completion.add_argument(
+        "--install", action="store_true", help="add the completion to your shell config file"
+    )
     # Internal: feeds identity names to the completion scripts. Reads a cache, so
     # it is instant and never touches the network. Omitting help keeps it out of
     # the help listing, and metavar keeps it out of the usage line.
@@ -301,6 +304,8 @@ def _run(argv: list[str] | None = None) -> int:
                 f"Could not detect your shell. Pass one of: {', '.join(SHELLS)}.", file=sys.stderr
             )
             return 2
+        if args.install:
+            return _install_completion(shell)
         print(completion_script(shell), end="")
         return 0
 
@@ -940,6 +945,38 @@ def _cmd_sandbox_check() -> int:
     print("credential env vars, no static credentials file, and no native profiles. Give it only")
     print("grantry's MCP server, or a credential_process profile with --caller agent.")
     return 211
+
+
+def _install_completion(shell: str) -> int:
+    """Append the completion source line to the user's shell config, once."""
+    import pathlib
+
+    rc_files = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/config.fish"}
+    source_lines = {
+        "bash": "source <(grantry completion bash)",
+        "zsh": "source <(grantry completion zsh)",
+        "fish": "grantry completion fish | source",
+    }
+    rc = pathlib.Path(rc_files[shell]).expanduser()
+    line = source_lines[shell]
+    try:
+        existing = rc.read_text(encoding="utf-8") if rc.exists() else ""
+    except OSError as e:
+        print(f"Could not read {rc}: {e}", file=sys.stderr)
+        return 1
+    if line in existing:
+        print(f"grantry completion is already set up in {rc}.")
+        return 0
+    try:
+        rc.parent.mkdir(parents=True, exist_ok=True)
+        with rc.open("a", encoding="utf-8") as fh:
+            fh.write(f"\n# grantry shell completion\n{line}\n")
+    except OSError as e:
+        print(f"Could not write {rc}: {e}", file=sys.stderr)
+        return 1
+    print(f"Added grantry completion to {rc}.")
+    print(f"Restart your shell, or run:  {line}")
+    return 0
 
 
 def _human_duration(seconds: float) -> str:

@@ -404,6 +404,21 @@ def test_completion_command(capsys):
     assert "complete -F _grantry_complete grantry" in out
 
 
+def test_completion_install_appends_to_rc(tmp_path, monkeypatch, capsys):
+    rc = tmp_path / ".zshrc"
+    rc.write_text("# existing\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+    rc2 = main(["completion", "--install"])
+    body = rc.read_text()
+    assert rc2 == 0
+    assert "source <(grantry completion zsh)" in body
+    assert "# existing" in body  # did not clobber
+    # idempotent: a second install does not add it twice
+    main(["completion", "zsh", "--install"])
+    assert body.count("grantry completion zsh") == rc.read_text().count("grantry completion zsh")
+
+
 def test_complete_identities_reads_cache(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GRANTRY_HOME", str(tmp_path))
     from grantry.idcache import write_cache

@@ -19,6 +19,21 @@ def test_completion_script_lists_core_subcommands():
         assert cmd in out
 
 
+@pytest.mark.parametrize("shell", SHELLS)
+def test_completion_handles_identity_flags(shell):
+    # --as / --identity / --profile must trigger identity completion (so
+    # 'admin assignments --as <TAB>' works, not just the positional commands).
+    out = completion_script(shell)
+    # fish spells long options as "-l as"; bash/zsh use "--as".
+    flags = (
+        ("-l as", "-l identity", "-l profile")
+        if shell == "fish"
+        else ("--as", "--identity", "--profile")
+    )
+    for flag in flags:
+        assert flag in out
+
+
 def test_unknown_shell_raises():
     with pytest.raises(KeyError):
         completion_script("powershell")
