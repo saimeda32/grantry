@@ -4,6 +4,14 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.4] - 2026-07-16
+
+### Added
+- Built-in live-filter identity picker: when you omit the identity (or `--profile`
+  value), grantry now shows the list and narrows it as you type, with arrow keys
+  and Enter, without needing `fzf` installed. fzf is still used when present; a
+  plain numbered menu remains the fallback where raw-mode input is unavailable.
+
 ## [0.8.3] - 2026-07-16
 
 ### Added
@@ -166,6 +174,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.8.4]: https://github.com/saimeda32/grantry/releases/tag/v0.8.4
 [0.8.3]: https://github.com/saimeda32/grantry/releases/tag/v0.8.3
 [0.8.2]: https://github.com/saimeda32/grantry/releases/tag/v0.8.2
 [0.8.1]: https://github.com/saimeda32/grantry/releases/tag/v0.8.1

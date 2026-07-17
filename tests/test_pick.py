@@ -1,4 +1,9 @@
-from grantry.pick import choose, choose_numbered, choose_with_fzf
+from grantry.pick import (
+    choose_numbered,
+    choose_with_fzf,
+    interactive_select,
+    match,
+)
 
 KEYS = ["acme-dev/AWSReadOnlyAccess", "acme-prod/AWSAdministratorAccess"]
 
@@ -34,19 +39,37 @@ def test_numbered_choice_out_of_range():
     assert choose_numbered(KEYS, read_line=lambda: "9", write=lambda s: None) is None
 
 
-def test_choose_wraps_numbered_menu_in_alternate_screen(monkeypatch):
-    import sys
+def test_match_filters_case_insensitively_and_and():
+    keys = ["acme-dev/AWSReadOnlyAccess", "acme-prod/AWSAdministratorAccess", "sandbox/PowerUser"]
+    assert match(keys, "") == keys  # empty query keeps everything
+    assert match(keys, "prod") == ["acme-prod/AWSAdministratorAccess"]
+    assert match(keys, "ACME read") == ["acme-dev/AWSReadOnlyAccess"]  # AND, case-insensitive
+    assert match(keys, "nomatch") == []
 
-    writes: list[str] = []
-    monkeypatch.setattr("grantry.pick.shutil.which", lambda _x: None)  # no fzf -> numbered
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
-    monkeypatch.setattr(sys.stderr, "write", writes.append)
-    monkeypatch.setattr(sys.stderr, "flush", lambda: None)
-    monkeypatch.setattr("builtins.input", lambda: "1")
 
-    result = choose(KEYS)
-    joined = "".join(writes)
-    assert result == "acme-dev/AWSReadOnlyAccess"
-    assert "\033[?1049h" in joined  # entered the alternate screen
-    assert "\033[?1049l" in joined  # and restored it (menu disappears)
+def test_interactive_select_types_to_filter_then_picks():
+    # Type "prod", then Enter selects the single match.
+    script = iter(["p", "r", "o", "d", "enter"])
+    result = interactive_select(KEYS, read_key=lambda: next(script), render=lambda *a: None)
+    assert result == "acme-prod/AWSAdministratorAccess"
+
+
+def test_interactive_select_arrows_move_selection():
+    # No filter; arrow down once then Enter picks the second item.
+    script = iter(["down", "enter"])
+    result = interactive_select(KEYS, read_key=lambda: next(script), render=lambda *a: None)
+    assert result == "acme-prod/AWSAdministratorAccess"
+
+
+def test_interactive_select_esc_cancels():
+    script = iter(["esc"])
+    assert interactive_select(KEYS, read_key=lambda: next(script), render=lambda *a: None) is None
+
+
+def test_interactive_select_backspace_widens():
+    # Type "xzy" (no match), backspace thrice, then "prod" narrows to one.
+    script = iter(
+        ["x", "z", "y", "backspace", "backspace", "backspace", "p", "r", "o", "d", "enter"]
+    )
+    result = interactive_select(KEYS, read_key=lambda: next(script), render=lambda *a: None)
+    assert result == "acme-prod/AWSAdministratorAccess"
