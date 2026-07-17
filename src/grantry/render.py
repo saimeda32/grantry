@@ -128,7 +128,14 @@ def render_assignments(assignments: list[Assignment], generated_on: str) -> str:
     import pkgutil
 
     rows = [
-        [a.principal_type, a.principal_name, a.permission_set_name, a.account_id, a.account_name]
+        [
+            a.principal_type,
+            a.principal_name,
+            a.permission_set_name,
+            a.account_id,
+            a.account_name,
+            a.account_env,
+        ]
         for a in assignments
     ]
     data = _escape_for_script(json.dumps(rows, separators=(",", ":")))

@@ -71,6 +71,60 @@ def test_crawl_aggregates_and_caches_principal_names():
     assert seen[-1] == (2, 2)
 
 
+class FakeOrgsTagged(FakeOrgs):
+    def list_tags_for_resource(self, ResourceId):  # noqa: N803
+        tags = {
+            "111": [{"Key": "Environment", "Value": "production"}],
+            "222": [{"Key": "env", "Value": "sandbox"}],
+        }
+        return {"Tags": tags.get(ResourceId, [])}
+
+
+def test_account_env_classification():
+    from grantry.admin import _account_env
+
+    class Orgs:
+        def __init__(self, tags):
+            self._t = tags
+
+        def list_tags_for_resource(self, ResourceId):  # noqa: N803
+            return {"Tags": self._t}
+
+    assert _account_env(Orgs([{"Key": "Environment", "Value": "prod"}]), "x") == "prod"
+    assert _account_env(Orgs([{"Key": "env", "Value": "staging"}]), "x") == "nonprod"
+    assert _account_env(Orgs([{"Key": "Team", "Value": "x"}]), "x") == ""  # no env tag
+
+    class Boom:
+        def list_tags_for_resource(self, ResourceId):  # noqa: N803
+            raise RuntimeError("AccessDenied")
+
+    assert _account_env(Boom(), "x") is None  # API error -> caller falls back to names
+
+
+def test_crawl_classifies_accounts_by_environment_tag():
+    clients = {
+        "sso-admin": FakeSSOAdmin(),
+        "identitystore": FakeIdentityStore(),
+        "organizations": FakeOrgsTagged(),
+    }
+    assignments = crawl_assignments(lambda n: clients[n])
+    env = {a.account_id: a.account_env for a in assignments}
+    assert env["111"] == "prod"  # tagged Environment=production
+    assert env["222"] == "nonprod"  # tagged env=sandbox
+
+
+def test_crawl_falls_back_when_tags_unavailable():
+    # FakeOrgs has no list_tags_for_resource, so classification errors and env
+    # stays "" (the visualization then guesses from the name).
+    clients = {
+        "sso-admin": FakeSSOAdmin(),
+        "identitystore": FakeIdentityStore(),
+        "organizations": FakeOrgs(),
+    }
+    assignments = crawl_assignments(lambda n: clients[n])
+    assert all(a.account_env == "" for a in assignments)
+
+
 def test_no_instances_returns_empty():
     class NoInst:
         def list_instances(self):

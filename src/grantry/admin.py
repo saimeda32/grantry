@@ -9,11 +9,18 @@ cannot assume such a role simply gets nothing; AWS is the gatekeeper.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
 ClientFactory = Callable[[str], Any]
+
+# Tag keys that commonly name an account's environment, and values that mean
+# production. Used to classify accounts authoritatively, rather than guessing
+# from the account name.
+_ENV_TAG_KEYS = ("environment", "env", "tier", "stage", "account-type", "accounttype")
+_PROD_VALUE = re.compile(r"prod|prd|\blive\b|production", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -24,6 +31,23 @@ class Assignment:
     permission_set_name: str
     account_id: str
     account_name: str
+    account_env: str = ""  # "prod" / "nonprod" from account tags, "" if unknown
+
+
+def _account_env(orgs: Any, account_id: str) -> str | None:
+    """Classify an account from its Organizations tags. Returns 'prod' or
+    'nonprod' when an environment tag is present, '' when the account has no such
+    tag, or None on an API error (e.g. missing organizations:ListTagsForResource),
+    which the caller treats as "stop probing and fall back to names".
+    """
+    try:
+        tags = orgs.list_tags_for_resource(ResourceId=account_id).get("Tags", [])
+    except Exception:
+        return None
+    for tag in tags:
+        if str(tag.get("Key", "")).lower() in _ENV_TAG_KEYS:
+            return "prod" if _PROD_VALUE.search(str(tag.get("Value", ""))) else "nonprod"
+    return ""
 
 
 def _paginate(op: Callable[..., dict[str, Any]], key: str, **kwargs: Any) -> Iterator[Any]:
@@ -87,6 +111,18 @@ def crawl_assignments(
     for acct in _paginate(orgs.list_accounts, "Accounts"):
         accounts[acct["Id"]] = acct.get("Name", acct["Id"])
 
+    # Classify each account from its environment tag, authoritatively. If the
+    # caller lacks organizations:ListTagsForResource, stop after the first error
+    # and leave the rest unknown (the visualization falls back to the name).
+    account_env: dict[str, str] = {}
+    probe_tags = True
+    for acct_id in accounts:
+        env = _account_env(orgs, acct_id) if probe_tags else ""
+        if env is None:
+            probe_tags = False
+            env = ""
+        account_env[acct_id] = env
+
     ps_names: dict[str, str] = {}
     for ps_arn in _paginate(sso.list_permission_sets, "PermissionSets", InstanceArn=instance_arn):
         d = sso.describe_permission_set(InstanceArn=instance_arn, PermissionSetArn=ps_arn)
@@ -121,6 +157,7 @@ def crawl_assignments(
                         permission_set_name=ps_names.get(ps_arn, ps_arn),
                         account_id=acct_id,
                         account_name=acct_name,
+                        account_env=account_env.get(acct_id, ""),
                     )
                 )
         if on_progress:

@@ -19,6 +19,7 @@
     --c-pset: #1baf7a;
     --c-account: #eb6834;
     --hl: #2a78d6;
+    --c-admin: #d7263d; --c-power: #e08a36; --c-dev: #2a78d6; --c-read: #1baf7a; --c-other: #8a8880;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -183,6 +184,29 @@
   #tableview td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   #tableview .tag { font-size: 11px; color: var(--ink-2); }
   .count-note { color: var(--ink-muted); font-size: 12px; margin: 8px 2px 0; }
+
+  /* --- enhancement toolbar: filters, export, theme --- */
+  .toolbar { display: flex; gap: 8px 10px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+  .toolbar .group { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .toolbar .tlabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--baseline);
+    border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px;
+  }
+  .chip .sw { width: 9px; height: 9px; border-radius: 50%; }
+  .chip[aria-pressed="false"] { opacity: 0.42; text-decoration: line-through; }
+  .tbtn {
+    background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--baseline);
+    border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .tbtn:hover { border-color: var(--hl); }
+  .spacer { flex: 1 1 auto; }
+  .node.filtered, .edge.filtered { display: none; }
+  #graphview { position: relative; }
+  #zoomhint { position: absolute; right: 12px; bottom: 10px; font-size: 11px; color: var(--ink-muted);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 7px; padding: 3px 8px; opacity: 0.85; }
+  .prodtag { font-size: 9px; letter-spacing: 0.04em; }
 </style>
 </head>
 <body>
@@ -705,6 +729,178 @@ function setView(graph) {
 }
 bG.addEventListener("click", () => setView(true));
 bT.addEventListener("click", () => setView(false));
+
+// ==================== enhancements ====================
+// Privilege classification and prod detection, derived from the names.
+const LEVELS = ["admin", "power", "dev", "read", "other"];
+const LEVEL_LABEL = { admin: "Admin", power: "Power", dev: "Developer", read: "Read-only", other: "Other" };
+const LEVEL_VAR = { admin: "var(--c-admin)", power: "var(--c-power)", dev: "var(--c-dev)", read: "var(--c-read)", other: "var(--c-other)" };
+function psetLevel(name) {
+  const s = name.toLowerCase();
+  if (/admin|fullaccess|superuser|organizationsfull/.test(s)) return "admin";
+  if (/poweruser|power-user/.test(s)) return "power";
+  if (/developer|engineer|engineering|devops|write|edit/.test(s)) return "dev";
+  if (/readonly|read-only|viewonly|view-only|\bview\b|audit|billing/.test(s)) return "read";
+  return "other";
+}
+// Environment comes from the account's tag when the crawl could read it (row[5]:
+// "prod"/"nonprod"). Only when it is unknown ("") do we fall back to guessing
+// from the account name, which is unreliable and clearly the weaker signal.
+const ACCT_ENV = new Map();
+for (const r of DATA) {
+  const tag = r[5] || "";
+  if (tag && !ACCT_ENV.has(r[4])) ACCT_ENV.set(r[4], tag);
+}
+function isProd(accountName) {
+  const tag = ACCT_ENV.get(accountName);
+  if (tag === "prod") return true;
+  if (tag === "nonprod") return false;
+  return /prod|master|payer|management|mgmt/i.test(accountName); // fallback: name guess
+}
+const ENV_BY_TAG = () => ACCT_ENV.size > 0;
+
+// Colour permission-set nodes by privilege level, and flag production accounts.
+for (const s of psets) {
+  const dot = nodeEls.get(s.key)?.querySelector("circle");
+  if (dot) dot.setAttribute("fill", LEVEL_VAR[psetLevel(s.name)]);
+}
+for (const a of accounts) {
+  if (!isProd(a.name)) continue;
+  const g = nodeEls.get(a.key); if (!g) continue;
+  const dot = g.querySelector("circle");
+  if (dot) dot.setAttribute("fill", "var(--c-admin)");
+  const tag = el("text", { x: a.x + 14, y: a.y + 15, class: "badge prodtag" });
+  tag.setAttribute("fill", "var(--c-admin)"); tag.textContent = "prod";
+  g.append(tag);
+}
+
+// Risk KPIs appended to the header row.
+(function () {
+  const adminRows = DATA.filter(r => psetLevel(r[2]) === "admin");
+  const adminProd = adminRows.filter(r => isProd(r[4]));
+  const usersAdmin = new Set(adminRows.map(r => r[1]));
+  const extra = [
+    [adminRows.length, "admin grants", "var(--c-admin)"],
+    [adminProd.length, "admin in prod", "var(--c-admin)"],
+    [usersAdmin.size, "principals with admin", "var(--c-admin)"],
+  ];
+  for (const [v, k, c] of extra) {
+    const d = document.createElement("div"); d.className = "kpi";
+    const dv = document.createElement("div"); dv.className = "v"; dv.textContent = String(v);
+    if (v > 0 && c) dv.style.color = c;
+    const dk = document.createElement("div"); dk.className = "k";
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = c; dk.append(dot);
+    dk.append(document.createTextNode(k));
+    d.append(dv, dk); kpiRoot.append(d);
+  }
+})();
+
+// Toolbar: privilege filter chips, prod-only, and exports.
+const levelOn = { admin: true, power: true, dev: true, read: true, other: true };
+let prodOnly = false;
+const toolbar = document.createElement("div"); toolbar.className = "toolbar";
+const g1 = document.createElement("span"); g1.className = "group";
+const lbl = document.createElement("span"); lbl.className = "tlabel"; lbl.textContent = "Show"; g1.append(lbl);
+for (const lv of LEVELS) {
+  const chip = document.createElement("button"); chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = LEVEL_VAR[lv];
+  chip.append(sw, document.createTextNode(LEVEL_LABEL[lv]));
+  chip.addEventListener("click", () => {
+    levelOn[lv] = !levelOn[lv]; chip.setAttribute("aria-pressed", String(levelOn[lv])); applyGraphFilter();
+  });
+  g1.append(chip);
+}
+const prodChip = document.createElement("button"); prodChip.className = "chip"; prodChip.setAttribute("aria-pressed", "false");
+const psw = document.createElement("span"); psw.className = "sw"; psw.style.background = "var(--c-admin)";
+prodChip.append(psw, document.createTextNode("Prod accounts only"));
+prodChip.style.opacity = "1"; prodChip.style.textDecoration = "none";
+prodChip.addEventListener("click", () => {
+  prodOnly = !prodOnly;
+  prodChip.setAttribute("aria-pressed", String(prodOnly));
+  prodChip.style.opacity = "1"; prodChip.style.textDecoration = "none";
+  prodChip.style.borderColor = prodOnly ? "var(--c-admin)" : "var(--baseline)";
+  applyGraphFilter();
+});
+const spacer = document.createElement("span"); spacer.className = "spacer";
+const bCsv = document.createElement("button"); bCsv.className = "tbtn"; bCsv.textContent = "Export CSV";
+const bSvg = document.createElement("button"); bSvg.className = "tbtn"; bSvg.textContent = "Export SVG";
+const bReset = document.createElement("button"); bReset.className = "tbtn"; bReset.textContent = "Reset view";
+toolbar.append(g1, document.createTextNode(" "), prodChip);
+if (!ENV_BY_TAG()) {
+  const note = document.createElement("span");
+  note.className = "tlabel"; note.style.textTransform = "none"; note.style.opacity = "0.85";
+  note.title = "Tag accounts with Environment=production for accurate detection.";
+  note.textContent = "prod detected by name (no account tags found)";
+  toolbar.append(note);
+}
+toolbar.append(spacer, bCsv, bSvg, bReset);
+document.querySelector(".layout").before(toolbar);
+
+function applyGraphFilter() {
+  const vis = new Map();
+  for (const s of psets) vis.set(s.key, levelOn[psetLevel(s.name)]);
+  for (const a of accounts) vis.set(a.key, !prodOnly || isProd(a.name));
+  for (const p of principals) {
+    vis.set(p.key, p.rows.some(r => vis.get(nkey("S", r[2])) && vis.get(nkey("A", r[4]))));
+  }
+  for (const [k, g] of nodeEls) g.classList.toggle("filtered", vis.get(k) === false);
+  for (const [k, pth] of edgeEls) {
+    const i = k.indexOf("→"); const a = k.slice(0, i), b = k.slice(i + 1);
+    pth.classList.toggle("filtered", !(vis.get(a) && vis.get(b)));
+  }
+}
+
+// Exports.
+function download(name, type, content) {
+  const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+bCsv.addEventListener("click", () => {
+  const esc = s => (/[",\n]/.test(s) ? '"' + String(s).replace(/"/g, '""') + '"' : s);
+  const head = ["principal_type", "principal", "permission_set", "account_id", "account_name"];
+  const csv = [head.join(",")].concat(DATA.map(r => [r[0], r[1], r[2], r[3], r[4]].map(esc).join(","))).join("\n");
+  download("grantry-assignments.csv", "text/csv", csv);
+});
+bSvg.addEventListener("click", () => {
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", SVGNS);
+  download("grantry-access-graph.svg", "image/svg+xml", new XMLSerializer().serializeToString(clone));
+});
+
+// Zoom and pan on the graph via the viewBox.
+const vb = { x: 0, y: 0, w: W, h: H };
+function setVB() { svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const r = svg.getBoundingClientRect();
+  const f = ev.deltaY < 0 ? 0.9 : 1.1;
+  const mx = vb.x + (ev.clientX - r.left) / r.width * vb.w;
+  const my = vb.y + (ev.clientY - r.top) / r.height * vb.h;
+  vb.w = Math.min(W * 2, Math.max(W * 0.2, vb.w * f));
+  vb.h = Math.min(H * 2, Math.max(H * 0.2, vb.h * f));
+  vb.x = mx - (ev.clientX - r.left) / r.width * vb.w;
+  vb.y = my - (ev.clientY - r.top) / r.height * vb.h;
+  setVB();
+}, { passive: false });
+let pan = null, suppressClick = false;
+svg.addEventListener("pointerdown", ev => {
+  if (ev.target.closest(".node")) return;
+  pan = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, moved: false };
+});
+svg.addEventListener("pointermove", ev => {
+  if (!pan) return;
+  const r = svg.getBoundingClientRect();
+  if (Math.abs(ev.clientX - pan.x) + Math.abs(ev.clientY - pan.y) > 3) pan.moved = true;
+  vb.x = pan.vx - (ev.clientX - pan.x) / r.width * vb.w;
+  vb.y = pan.vy - (ev.clientY - pan.y) / r.height * vb.h;
+  setVB();
+});
+window.addEventListener("pointerup", () => { if (pan && pan.moved) suppressClick = true; pan = null; });
+svg.addEventListener("click", ev => { if (suppressClick) { ev.stopImmediatePropagation(); suppressClick = false; } }, true);
+bReset.addEventListener("click", () => { vb.x = 0; vb.y = 0; vb.w = W; vb.h = H; setVB(); });
+const zh = document.createElement("div"); zh.id = "zoomhint"; zh.textContent = "scroll to zoom · drag to pan";
+document.getElementById("graphview").append(zh);
 </script>
 </body>
 </html>

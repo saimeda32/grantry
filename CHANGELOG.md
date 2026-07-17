@@ -4,6 +4,22 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.9.0] - 2026-07-16
+
+### Added
+- Richer org access graph (`grantry admin assignments --visualize`):
+  - Permission-set nodes are colour-coded by privilege level (admin, power,
+    developer, read-only, other), and production accounts are flagged.
+  - Production accounts are classified authoritatively from their AWS
+    Organizations `Environment`-style tag (the crawl reads account tags when it
+    can), falling back to the account name only when no tag is available, and the
+    page says so when it is guessing.
+  - Risk KPIs: admin grants, admin-in-prod, and principals with admin.
+  - Filter chips to show/hide by privilege level and to show production accounts
+    only.
+  - Export the assignments as CSV and the graph as SVG.
+  - Scroll to zoom and drag to pan the graph, with a reset-view button.
+
 ## [0.8.4] - 2026-07-16
 
 ### Added
@@ -174,6 +190,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.9.0]: https://github.com/saimeda32/grantry/releases/tag/v0.9.0
 [0.8.4]: https://github.com/saimeda32/grantry/releases/tag/v0.8.4
 [0.8.3]: https://github.com/saimeda32/grantry/releases/tag/v0.8.3
 [0.8.2]: https://github.com/saimeda32/grantry/releases/tag/v0.8.2
