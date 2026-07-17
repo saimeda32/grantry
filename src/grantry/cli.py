@@ -595,12 +595,26 @@ def _cmd_admin_assignments(
         from grantry.render import render_assignments
 
         # Gather the extra context (group members, permission-set details, OUs).
-        # Best effort: if it fails or is partial, the graph still renders.
+        # Best effort: if it fails or is partial, the graph still renders. Report
+        # what came back so an empty result is visible, not silent.
         enrichment = None
         try:
             enrichment = crawl_enrichment(make_client, assignments)
-        except Exception:
-            enrichment = None
+        except Exception as e:
+            print(f"note: extra graph context unavailable ({e}).", file=_sys.stderr)
+        if enrichment is not None:
+            print(
+                f"Enriched: {len(enrichment.group_members)} group memberships, "
+                f"{len(enrichment.permission_sets)} permission-set details, "
+                f"{len(enrichment.account_ou)} account OUs.",
+                file=_sys.stderr,
+            )
+            if not enrichment.group_members:
+                print(
+                    "  (no group memberships found; the crawl role may lack "
+                    "identitystore:ListGroupMemberships)",
+                    file=_sys.stderr,
+                )
         html = render_assignments(
             assignments, _iso_now()[:10], enrichment=enrichment, crawled_as=ident
         )

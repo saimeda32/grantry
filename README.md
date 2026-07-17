@@ -248,13 +248,14 @@ The graph is built for an access review, not just a picture:
   AWS Organizations `Environment` tag** (falling back to the account name only
   when there is no tag, and saying so when it guesses).
 - **Risk KPIs** — admin grants, admin-in-production, and principals with admin.
-- **Filter** by privilege level or to production accounts only; **search** any
-  principal, permission set, or account; toggle a **table view**.
-- **Click any node** to trace its full access. A group expands to its **members**;
-  a permission set shows its **session duration, managed policies, and inline
-  policy**; an account shows its **Organizational Unit**.
-- **Export** the assignments as CSV or the graph as SVG. Scroll to zoom, drag to
-  pan.
+- **Search** any principal, permission set, or account, and toggle a **table
+  view**.
+- **Click any node** to trace its full access (everything else dims). A group
+  expands to its **members**; a permission set shows its **session duration,
+  managed policies, and inline policy**; an account shows its **Organizational
+  Unit**. Group members, policy details, and OUs need the crawl role to have the
+  matching read permissions; the page says so when it cannot read them.
+- **Export** the assignments as CSV or the graph as SVG.
 
 Use `--snapshot` to save a crawl and `--diff` to see what changed since the last
 one.

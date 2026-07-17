@@ -4,6 +4,19 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.4] - 2026-07-16
+
+### Changed
+- Simplified the access graph after feedback: removed the privilege/prod filter
+  chips and the scroll-to-zoom (which hijacked the page scroll). The page scrolls
+  normally now; a static colour legend replaces the filter chips, and hover/click
+  focus plus search remain for exploration.
+
+### Fixed
+- When group members, permission-set policies, or OUs cannot be read, the panel
+  and the crawl output now say so (naming the missing permission, e.g.
+  `identitystore:ListGroupMemberships`) instead of silently omitting them.
+
 ## [0.10.3] - 2026-07-16
 
 ### Added
@@ -228,6 +241,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.10.4]: https://github.com/saimeda32/grantry/releases/tag/v0.10.4
 [0.10.3]: https://github.com/saimeda32/grantry/releases/tag/v0.10.3
 [0.10.2]: https://github.com/saimeda32/grantry/releases/tag/v0.10.2
 [0.10.1]: https://github.com/saimeda32/grantry/releases/tag/v0.10.1

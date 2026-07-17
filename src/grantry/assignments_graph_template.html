@@ -195,6 +195,8 @@
     border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px;
   }
   .chip .sw { width: 9px; height: 9px; border-radius: 50%; }
+  .legenditem { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
+  .legenditem .sw { width: 9px; height: 9px; border-radius: 50%; }
   .chip[aria-pressed="false"] { opacity: 0.42; text-decoration: line-through; }
   .tbtn {
     background: var(--surface-1); color: var(--ink-1); border: 1px solid var(--baseline);
@@ -799,37 +801,22 @@ for (const a of accounts) {
   }
 })();
 
-// Toolbar: privilege filter chips, prod-only, and exports.
-const levelOn = { admin: true, power: true, dev: true, read: true, other: true };
-let prodOnly = false;
+// Toolbar: a colour legend and exports. Interactive filters and wheel-zoom were
+// removed on purpose: the page scrolls normally, and hover/click focus plus
+// search cover exploration without the clutter.
 const toolbar = document.createElement("div"); toolbar.className = "toolbar";
-const g1 = document.createElement("span"); g1.className = "group";
-const lbl = document.createElement("span"); lbl.className = "tlabel"; lbl.textContent = "Show"; g1.append(lbl);
+const legend = document.createElement("span"); legend.className = "group";
+const llbl = document.createElement("span"); llbl.className = "tlabel"; llbl.textContent = "Level"; legend.append(llbl);
 for (const lv of LEVELS) {
-  const chip = document.createElement("button"); chip.className = "chip"; chip.setAttribute("aria-pressed", "true");
+  const item = document.createElement("span"); item.className = "legenditem";
   const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = LEVEL_VAR[lv];
-  chip.append(sw, document.createTextNode(LEVEL_LABEL[lv]));
-  chip.addEventListener("click", () => {
-    levelOn[lv] = !levelOn[lv]; chip.setAttribute("aria-pressed", String(levelOn[lv])); applyGraphFilter();
-  });
-  g1.append(chip);
+  item.append(sw, document.createTextNode(LEVEL_LABEL[lv]));
+  legend.append(item);
 }
-const prodChip = document.createElement("button"); prodChip.className = "chip"; prodChip.setAttribute("aria-pressed", "false");
-const psw = document.createElement("span"); psw.className = "sw"; psw.style.background = "var(--c-admin)";
-prodChip.append(psw, document.createTextNode("Prod accounts only"));
-prodChip.style.opacity = "1"; prodChip.style.textDecoration = "none";
-prodChip.addEventListener("click", () => {
-  prodOnly = !prodOnly;
-  prodChip.setAttribute("aria-pressed", String(prodOnly));
-  prodChip.style.opacity = "1"; prodChip.style.textDecoration = "none";
-  prodChip.style.borderColor = prodOnly ? "var(--c-admin)" : "var(--baseline)";
-  applyGraphFilter();
-});
 const spacer = document.createElement("span"); spacer.className = "spacer";
 const bCsv = document.createElement("button"); bCsv.className = "tbtn"; bCsv.textContent = "Export CSV";
 const bSvg = document.createElement("button"); bSvg.className = "tbtn"; bSvg.textContent = "Export SVG";
-const bReset = document.createElement("button"); bReset.className = "tbtn"; bReset.textContent = "Reset view";
-toolbar.append(g1, document.createTextNode(" "), prodChip);
+toolbar.append(legend);
 if (!ENV_BY_TAG()) {
   const note = document.createElement("span");
   note.className = "tlabel"; note.style.textTransform = "none"; note.style.opacity = "0.85";
@@ -837,22 +824,8 @@ if (!ENV_BY_TAG()) {
   note.textContent = "prod detected by name (no account tags found)";
   toolbar.append(note);
 }
-toolbar.append(spacer, bCsv, bSvg, bReset);
+toolbar.append(spacer, bCsv, bSvg);
 document.querySelector(".layout").before(toolbar);
-
-function applyGraphFilter() {
-  const vis = new Map();
-  for (const s of psets) vis.set(s.key, levelOn[psetLevel(s.name)]);
-  for (const a of accounts) vis.set(a.key, !prodOnly || isProd(a.name));
-  for (const p of principals) {
-    vis.set(p.key, p.rows.some(r => vis.get(nkey("S", r[2])) && vis.get(nkey("A", r[4]))));
-  }
-  for (const [k, g] of nodeEls) g.classList.toggle("filtered", vis.get(k) === false);
-  for (const [k, pth] of edgeEls) {
-    const i = k.indexOf("→"); const a = k.slice(0, i), b = k.slice(i + 1);
-    pth.classList.toggle("filtered", !(vis.get(a) && vis.get(b)));
-  }
-}
 
 // Exports.
 function download(name, type, content) {
@@ -871,40 +844,6 @@ bSvg.addEventListener("click", () => {
   clone.setAttribute("xmlns", SVGNS);
   download("grantry-access-graph.svg", "image/svg+xml", new XMLSerializer().serializeToString(clone));
 });
-
-// Zoom and pan on the graph via the viewBox.
-const vb = { x: 0, y: 0, w: W, h: H };
-function setVB() { svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
-svg.addEventListener("wheel", ev => {
-  ev.preventDefault();
-  const r = svg.getBoundingClientRect();
-  const f = ev.deltaY < 0 ? 0.9 : 1.1;
-  const mx = vb.x + (ev.clientX - r.left) / r.width * vb.w;
-  const my = vb.y + (ev.clientY - r.top) / r.height * vb.h;
-  vb.w = Math.min(W * 2, Math.max(W * 0.2, vb.w * f));
-  vb.h = Math.min(H * 2, Math.max(H * 0.2, vb.h * f));
-  vb.x = mx - (ev.clientX - r.left) / r.width * vb.w;
-  vb.y = my - (ev.clientY - r.top) / r.height * vb.h;
-  setVB();
-}, { passive: false });
-let pan = null, suppressClick = false;
-svg.addEventListener("pointerdown", ev => {
-  if (ev.target.closest(".node")) return;
-  pan = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, moved: false };
-});
-svg.addEventListener("pointermove", ev => {
-  if (!pan) return;
-  const r = svg.getBoundingClientRect();
-  if (Math.abs(ev.clientX - pan.x) + Math.abs(ev.clientY - pan.y) > 3) pan.moved = true;
-  vb.x = pan.vx - (ev.clientX - pan.x) / r.width * vb.w;
-  vb.y = pan.vy - (ev.clientY - pan.y) / r.height * vb.h;
-  setVB();
-});
-window.addEventListener("pointerup", () => { if (pan && pan.moved) suppressClick = true; pan = null; });
-svg.addEventListener("click", ev => { if (suppressClick) { ev.stopImmediatePropagation(); suppressClick = false; } }, true);
-bReset.addEventListener("click", () => { vb.x = 0; vb.y = 0; vb.w = W; vb.h = H; setVB(); });
-const zh = document.createElement("div"); zh.id = "zoomhint"; zh.textContent = "scroll to zoom · drag to pan";
-document.getElementById("graphview").append(zh);
 
 // ---- enrichment: crawl provenance, group members, permission-set details, OU ----
 if (CRAWLED_AS) {
@@ -937,11 +876,24 @@ renderPanel = function (n) {
   const panel = document.getElementById("panel");
   const note = panel.querySelector(".jump-note");
   const addH3 = (txt) => { const h = document.createElement("h3"); h.textContent = txt; return h; };
-  if (n.kind === "P" && n.type === "GROUP" && MEMBERS[n.name] && MEMBERS[n.name].length) {
-    const h = addH3("Members (" + MEMBERS[n.name].length + ")");
-    const ul = document.createElement("ul"); ul.style.setProperty("--target-dot", "var(--c-principal)");
-    for (const u of MEMBERS[n.name]) { const li = document.createElement("li"); li.textContent = u; ul.append(li); }
-    panel.insertBefore(h, note); panel.insertBefore(ul, note);
+  if (n.kind === "P" && n.type === "GROUP") {
+    const members = MEMBERS[n.name];
+    if (members && members.length) {
+      const h = addH3("Members (" + members.length + ")");
+      const ul = document.createElement("ul"); ul.style.setProperty("--target-dot", "var(--c-principal)");
+      for (const u of members) { const li = document.createElement("li"); li.textContent = u; ul.append(li); }
+      panel.insertBefore(h, note); panel.insertBefore(ul, note);
+    } else if (!Object.keys(MEMBERS).length) {
+      const h = addH3("Members");
+      const p = document.createElement("p"); p.className = "jump-note"; p.style.paddingLeft = "0";
+      p.textContent = "Not available — the crawl role needs identitystore:ListGroupMemberships (and ListGroupMembership / DescribeUser).";
+      panel.insertBefore(h, note); panel.insertBefore(p, note);
+    } else if (members) {
+      const h = addH3("Members (0)");
+      const p = document.createElement("p"); p.className = "jump-note"; p.style.paddingLeft = "0";
+      p.textContent = "This group has no members.";
+      panel.insertBefore(h, note); panel.insertBefore(p, note);
+    }
   }
   if (n.kind === "S" && PSET_META[n.name]) {
     const m = PSET_META[n.name];
