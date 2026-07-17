@@ -41,6 +41,10 @@ testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.10"
+# Analyze as POSIX everywhere (including the Windows CI runner). grantry uses a
+# few Unix-only modules (termios/tty for the live picker, signal.SIGPIPE) guarded
+# at runtime; without this, mypy on Windows flags those attributes as missing.
+platform = "linux"
 strict = true
 files = ["src", "tests"]
 

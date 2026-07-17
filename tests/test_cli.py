@@ -436,6 +436,7 @@ def test_completion_install_appends_to_rc(tmp_path, monkeypatch, capsys):
     rc = tmp_path / ".zshrc"
     rc.write_text("# existing\n")
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))  # ~ expansion on Windows
     monkeypatch.setenv("SHELL", "/bin/zsh")
     rc2 = main(["completion", "--install"])
     body = rc.read_text()
