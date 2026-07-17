@@ -152,8 +152,14 @@ def _ensure_session(broker: Broker) -> bool:
 # logout, mcp, and the offline commands (version, completion, install, ...) are
 # deliberately absent: they manage their own session or need none. check/status
 # are diagnostics and report "no session" as a finding rather than logging in.
+#
+# credential-process is deliberately NOT here. It is a machine-facing command
+# (the AWS SDK invokes it headless), so it must never try to open a browser. Its
+# two honest outcomes are: refresh the SSO token silently via the refresh token
+# (see Broker.cached_session), or fail cleanly telling the caller to log in. A
+# running agent gets fresh creds from that silent refresh, not from a login.
 _SESSION_COMMANDS = frozenset(
-    {"ls", "run", "switch", "console", "credential-process", "populate", "graph", "init", "admin"}
+    {"ls", "run", "switch", "console", "populate", "graph", "init", "admin"}
 )
 
 

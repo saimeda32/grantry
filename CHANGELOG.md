@@ -4,6 +4,19 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.11.1] - 2026-07-17
+
+### Changed
+- `credential-process` no longer attempts an interactive login. It is a
+  machine-facing command (the AWS SDK invokes it headless), so it must never open
+  a browser. When credentials are needed mid-task, grantry refreshes the SSO
+  token silently using the stored refresh token and mints fresh role credentials
+  with no interaction; this is what keeps a running agent's access working. Only
+  when the refresh token itself has expired does it fail, cleanly, asking you to
+  run `grantry login`. The 0.11.0 auto-login (for a human at a terminal) still
+  covers `ls`, `run`, `switch`, `console`, `populate`, `graph`, `init`, and
+  `admin`.
+
 ## [0.11.0] - 2026-07-17
 
 ### Changed
