@@ -306,6 +306,15 @@ def _run(argv: list[str] | None = None) -> int:
             return 2
         if args.install:
             return _install_completion(shell)
+        if sys.stdout.isatty():
+            # Run at a prompt, not sourced: guide the user instead of printing a
+            # wall of shell script. When it is sourced, stdout is a pipe and we
+            # fall through to emit the actual script.
+            print("To turn on TAB completion, let grantry set it up for you:")
+            print("    grantry completion --install")
+            print("Or add this line to your shell config yourself:")
+            print(f"    {_COMPLETION_SOURCE[shell]}")
+            return 0
         print(completion_script(shell), end="")
         return 0
 
@@ -947,18 +956,20 @@ def _cmd_sandbox_check() -> int:
     return 211
 
 
+_COMPLETION_SOURCE = {
+    "bash": "source <(grantry completion bash)",
+    "zsh": "source <(grantry completion zsh)",
+    "fish": "grantry completion fish | source",
+}
+_COMPLETION_RC = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/config.fish"}
+
+
 def _install_completion(shell: str) -> int:
     """Append the completion source line to the user's shell config, once."""
     import pathlib
 
-    rc_files = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/config.fish"}
-    source_lines = {
-        "bash": "source <(grantry completion bash)",
-        "zsh": "source <(grantry completion zsh)",
-        "fish": "grantry completion fish | source",
-    }
-    rc = pathlib.Path(rc_files[shell]).expanduser()
-    line = source_lines[shell]
+    rc = pathlib.Path(_COMPLETION_RC[shell]).expanduser()
+    line = _COMPLETION_SOURCE[shell]
     try:
         existing = rc.read_text(encoding="utf-8") if rc.exists() else ""
     except OSError as e:

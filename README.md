@@ -118,6 +118,8 @@ grantry completion --install     # detects your shell, adds it to your rc file
 exec $SHELL                       # or restart your terminal
 ```
 
+Not sure? Just run `grantry completion` and it prints what to do.
+
 Then TAB fills in your identities for `run`, `switch`, `console`, and after
 `--as` / `--identity` / `--profile`. To wire it up by hand instead, source the
 script from your rc file: `source <(grantry completion zsh)` (or `bash`), or

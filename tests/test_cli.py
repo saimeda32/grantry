@@ -404,6 +404,18 @@ def test_completion_command(capsys):
     assert "complete -F _grantry_complete grantry" in out
 
 
+def test_completion_at_a_prompt_shows_guidance(monkeypatch, capsys):
+    import sys
+
+    monkeypatch.setenv("SHELL", "/bin/zsh")
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)  # pretend we are a terminal
+    rc = main(["completion"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "grantry completion --install" in out
+    assert "_grantry_complete" not in out  # guidance, not the raw script
+
+
 def test_completion_install_appends_to_rc(tmp_path, monkeypatch, capsys):
     rc = tmp_path / ".zshrc"
     rc.write_text("# existing\n")

@@ -4,6 +4,14 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.2] - 2026-07-16
+
+### Changed
+- `grantry completion` run at a prompt now prints how to turn completion on
+  (`grantry completion --install`) instead of a wall of shell script. It still
+  emits the raw script when sourced or piped, so `source <(grantry completion zsh)`
+  keeps working.
+
 ## [0.10.1] - 2026-07-16
 
 ### Added
@@ -213,6 +221,7 @@ All notable changes to grantry are recorded here. The format follows
 - `grantry admin assignments` to crawl who-has-what across the org, scaling to
   10k+ assignments, with an interactive `--visualize` graph.
 
+[0.10.2]: https://github.com/saimeda32/grantry/releases/tag/v0.10.2
 [0.10.1]: https://github.com/saimeda32/grantry/releases/tag/v0.10.1
 [0.10.0]: https://github.com/saimeda32/grantry/releases/tag/v0.10.0
 [0.9.0]: https://github.com/saimeda32/grantry/releases/tag/v0.9.0
