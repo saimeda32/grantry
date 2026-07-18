@@ -130,8 +130,8 @@ def test_login_warms_completion_cache(tmp_path, monkeypatch, capsys):
     rc = main(["login"])
     assert rc == 0
     keys = read_keys()
-    assert "prod/ReadOnlyAccess" in keys
-    assert "dev-pay/AWSPowerUserAccess" in keys
+    assert "prod.ReadOnlyAccess" in keys
+    assert "dev-pay.AWSPowerUserAccess" in keys
 
 
 def test_login_shows_completion_tip_once(tmp_path, monkeypatch, capsys):
@@ -159,7 +159,7 @@ def test_login_no_populate_skips_config_but_warms_cache(tmp_path, monkeypatch, c
     rc = main(["login", "--no-populate"])
     assert rc == 0
     assert not (tmp_path / "config").exists()  # no profiles written
-    assert "prod/ReadOnlyAccess" in read_keys()  # cache still warmed
+    assert "prod.ReadOnlyAccess" in read_keys()  # cache still warmed
 
 
 def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
@@ -469,7 +469,7 @@ def test_complete_identities_reads_cache(tmp_path, monkeypatch, capsys):
     rc = main(["_complete-identities"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "acme-dev/AWSReadOnlyAccess" in out
+    assert "acme-dev.AWSReadOnlyAccess" in out
 
 
 def test_complete_identities_empty_without_cache(tmp_path, monkeypatch, capsys):

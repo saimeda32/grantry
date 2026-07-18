@@ -67,5 +67,5 @@ def test_login_then_agent_grant_allow_and_deny(tmp_path, monkeypatch):
 
         audit = AuditLog().entries()
         assert audit[-1]["allowed"] is False
-        assert audit[-1]["identity"] == "prod/AWSPowerUserAccess"
+        assert audit[-1]["identity"] == "prod.AWSPowerUserAccess"
         assert audit[-2]["allowed"] is True

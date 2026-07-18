@@ -6,7 +6,7 @@ def ident(acct="prod", role="ReadOnlyAccess", aid="111122223333"):
 
 
 def test_key():
-    assert ident("dev", "Admin").key == "dev/Admin"
+    assert ident("dev", "Admin").key == "dev.Admin"
 
 
 def test_shell_safe_collapses_whitespace():
@@ -18,14 +18,34 @@ def test_shell_safe_collapses_whitespace():
 
 def test_key_has_no_spaces():
     # An account name with spaces must produce a quote-free identity key.
-    assert ident("Acme Corp Account", "Admin Access").key == "Acme-Corp-Account/Admin-Access"
+    assert ident("Acme Corp Account", "Admin Access").key == "Acme-Corp-Account.Admin-Access"
+
+
+def test_key_matches_profile_name():
+    # The identity key IS the AWS profile name, so one string works for both
+    # `grantry run` and `aws --profile`.
+    from grantry.identity import safe_profile_name
+
+    i = ident("acme-prod", "AWSReadOnlyAccess")
+    assert i.key == safe_profile_name("acme-prod", "AWSReadOnlyAccess")
+    assert i.key == "acme-prod.AWSReadOnlyAccess"
+
+
+def test_dot_is_canonical_separator():
+    assert matches("prod.AWSReadOnlyAccess", ident("prod", "AWSReadOnlyAccess"))
+    assert matches("*.AWSReadOnlyAccess", ident("anything", "AWSReadOnlyAccess"))
+    assert not matches("*.AWSReadOnlyAccess", ident("anything", "AdminAccess"))
+    assert matches("prod.*", ident("prod", "AnyRole"))
+    # an exact key paste always resolves
+    assert matches("prod.AWSReadOnlyAccess", ident("prod", "AWSReadOnlyAccess"))
 
 
 def test_spaced_name_matches_hyphenated_pattern():
     # A policy written against the displayed (hyphenated) name matches the
-    # identity whose raw account name still carries spaces.
+    # identity whose raw account name still carries spaces. Both separators work.
+    assert matches("Acme-Corp-Account.*", ident("Acme Corp Account", "ReadOnlyAccess"))
     assert matches("Acme-Corp-Account/*", ident("Acme Corp Account", "ReadOnlyAccess"))
-    assert matches("*/Admin-Access", ident("prod", "Admin Access"))
+    assert matches("*.Admin-Access", ident("prod", "Admin Access"))
 
 
 def test_exact_match():

@@ -104,7 +104,7 @@ def test_agent_grant_allowed_mints_and_audits(tmp_path, monkeypatch):
     assert res.credentials is not None
     assert res.credentials.access_key_id == "AKIA"
     entries = AuditLog().entries()
-    assert entries[-1]["identity"] == "prod/ReadOnlyAccess"
+    assert entries[-1]["identity"] == "prod.ReadOnlyAccess"
     assert entries[-1]["allowed"] is True
 
 

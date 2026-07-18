@@ -333,7 +333,7 @@ def _run(argv: list[str] | None = None) -> int:
         nargs="?",
         const=None,
         default=None,
-        help="admin identity to crawl with, as account/role; omit the value to pick interactively",
+        help="admin identity to crawl with, as account.role; omit the value to pick interactively",
     )
     p_assign.add_argument("--ttl", default=default_ttl)
     p_assign.add_argument("--visualize", action="store_true")
@@ -802,7 +802,7 @@ def _human_credentials(
         reason = result.decision.reason
         print(f"Denied: {reason}")
         if "unknown identity" in reason:
-            print("See 'grantry ls' for valid identities (they look like account/role).")
+            print("See 'grantry ls' for valid identities (they look like account.role).")
         else:
             print("This is blocked by your policy. Review it with 'grantry status'.")
         return 1, None
@@ -830,7 +830,7 @@ def _resolve_identity(broker: Broker, identity: str | None) -> str | None:
         return None
     chosen = choose(keys)
     if chosen is None:
-        print("No identity chosen. Pass one explicitly, e.g. 'grantry switch acct/Role'.")
+        print("No identity chosen. Pass one explicitly, e.g. 'grantry switch acct.Role'.")
     return chosen
 
 

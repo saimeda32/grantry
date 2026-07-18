@@ -28,24 +28,24 @@ def scaffold_policy(identities: list[Identity], generated_on: str) -> str:
     lines.append("#")
     lines.append("# THIS STARTER IS PERMISSIVE: agents may use ANY role you can, so grantry")
     lines.append("# works right away. To restrict what your agents can do, replace the")
-    lines.append('#   - identity: "*/*"')
+    lines.append('#   - identity: "*.*"')
     lines.append("# line below with the specific accounts and roles you want to allow, and")
-    lines.append("# add deny rules. A pattern is account-name/role-name; * is a wildcard")
+    lines.append("# add deny rules. A pattern is account-name.role-name; * is a wildcard")
     lines.append("# within a segment. Deny beats allow. For agents, anything not allowed is")
-    lines.append("# denied once you remove the */* line.")
+    lines.append("# denied once you remove the *.* line.")
     lines.append("#")
-    lines.append("# A safer starting point, if you want it, is to delete the */* allow and")
+    lines.append("# A safer starting point, if you want it, is to delete the *.* allow and")
     lines.append("# uncomment these instead:")
     if readonly_roles:
         for r in readonly_roles:
-            lines.append(f'#   - identity: "*/{r}"          # read-only anywhere')
+            lines.append(f'#   - identity: "*.{r}"          # read-only anywhere')
     else:
-        lines.append('#   - identity: "*/AWSReadOnlyAccess"   # your read-only role')
+        lines.append('#   - identity: "*.AWSReadOnlyAccess"   # your read-only role')
     lines.append("# with these denies:")
     for r in admin_roles:
-        lines.append(f'#   - identity: "*/{r}"')
+        lines.append(f'#   - identity: "*.{r}"')
     for a in sensitive_accounts:
-        lines.append(f'#   - identity: "{a}/*"           # sensitive account')
+        lines.append(f'#   - identity: "{a}.*"           # sensitive account')
     lines.append("#")
     lines.append("# Your accessible identities:")
     for i in sorted(identities, key=lambda x: x.key):
@@ -53,7 +53,7 @@ def scaffold_policy(identities: list[Identity], generated_on: str) -> str:
     lines.append("")
     lines.append("agents:")
     lines.append("  allow:")
-    lines.append('    - identity: "*/*"          # PERMISSIVE: any account, any role. Restrict me.')
+    lines.append('    - identity: "*.*"          # PERMISSIVE: any account, any role. Restrict me.')
     lines.append("  deny: []")
     lines.append("  max_ttl: 15m")
     lines.append("humans:")

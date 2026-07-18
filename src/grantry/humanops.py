@@ -6,26 +6,16 @@ so it is unit-tested directly. The CLI is a thin shell that calls these.
 
 from __future__ import annotations
 
-import re
 import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+# safe_profile_name is the canonical identity spelling, defined once in identity
+# so the profile name grantry writes always equals the identity key it shows.
+# Re-exported here (import-as form) because the human-side commands and tests
+# import it from humanops.
+from grantry.identity import safe_profile_name as safe_profile_name
 from grantry.providers.base import Credentials
-
-_UNSAFE_PROFILE_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def safe_profile_name(account_name: str, role_name: str) -> str:
-    """Build a valid ~/.aws/config profile name from an account and role.
-
-    AWS SDKs parse profile names inconsistently, so whitespace and other unsafe
-    characters are collapsed to a single hyphen. "Prod Account/Admin Access"
-    becomes "Prod-Account.Admin-Access".
-    """
-    acct = _UNSAFE_PROFILE_CHARS.sub("-", account_name.strip()).strip("-")
-    role = _UNSAFE_PROFILE_CHARS.sub("-", role_name.strip()).strip("-")
-    return f"{acct or 'account'}.{role or 'role'}"
 
 
 def credential_process_json(creds: Credentials) -> str:

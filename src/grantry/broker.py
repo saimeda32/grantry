@@ -263,31 +263,36 @@ class Broker:
         )
 
     def _find(self, session: Session, ident_key: str) -> Identity | None:
-        from grantry.humanops import safe_profile_name
         from grantry.identity import shell_safe
 
         idents = self._provider.list_identities(session)
-        # Exact "account/role" match first.
+        # Exact canonical "account.role" match first.
         for i in idents:
             if i.key == ident_key:
                 return i
-        # Also accept the "account.role" profile-name form that 'populate' writes
-        # to ~/.aws/config, and the raw spaced name a user might paste from the
-        # AWS console, case-insensitively. i.key is already shell-safe (spaces
-        # collapsed to hyphens), so we shell-safe the input before comparing;
-        # that way "Acme Corp/Admin" and "Acme-Corp/Admin" both resolve.
+        # Otherwise accept any reasonable spelling, case-insensitively: the
+        # canonical dot key, the legacy "account/role" slash form, and the raw
+        # (unsanitized) account/role a user might paste from the AWS console.
         wanted = ident_key.lower()
-        safe_wanted = shell_safe(ident_key).lower()
         for i in idents:
-            if i.key.lower() in (wanted, safe_wanted):
-                return i
-            if safe_profile_name(i.account_name, i.role_name).lower() == wanted:
+            acct, role = shell_safe(i.account_name).lower(), shell_safe(i.role_name).lower()
+            spellings = {
+                i.key.lower(),
+                f"{acct}/{role}",
+                f"{i.account_name.lower()}/{i.role_name.lower()}",
+                f"{i.account_name.lower()}.{i.role_name.lower()}",
+            }
+            if wanted in spellings or shell_safe(ident_key).lower() in spellings:
                 return i
         return None
 
 
 def _split_key(key: str) -> tuple[str, str]:
-    if "/" in key:
-        acct, role = key.split("/", 1)
-        return acct, role
+    # Only used to label an unknown (non-resolving) identity in the audit, so a
+    # best-effort split is fine. Accept both the canonical 'account.role' and the
+    # legacy 'account/role' spellings.
+    for sep in ("/", "."):
+        if sep in key:
+            acct, role = key.split(sep, 1)
+            return acct, role
     return key, ""

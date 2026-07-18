@@ -28,7 +28,7 @@ Sleep 2.2s
 Type "grantry check --sandbox" Sleep 700ms Enter
 Sleep 2.5s
 
-Type "# TAB completes your real account/role identities" Sleep 400ms Enter
+Type "# TAB completes your real account.role identities" Sleep 400ms Enter
 Type "grantry switch acme-pa" Sleep 900ms
 Tab Sleep 2200ms
 Ctrl+C Sleep 700ms

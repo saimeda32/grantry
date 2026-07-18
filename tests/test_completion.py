@@ -48,7 +48,7 @@ def test_idcache_round_trip(tmp_path, monkeypatch):
         ]
     )
     keys = read_keys()
-    assert keys == ["acme-dev/AWSReadOnlyAccess", "acme-prod/AWSPowerUserAccess"]
+    assert keys == ["acme-dev.AWSReadOnlyAccess", "acme-prod.AWSPowerUserAccess"]
 
 
 def test_idcache_missing_returns_empty(tmp_path, monkeypatch):

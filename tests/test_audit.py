@@ -20,7 +20,7 @@ def test_record_and_read(tmp_path, monkeypatch):
     assert len(entries) == 1
     e = entries[0]
     assert e["caller"] == "claude-code"
-    assert e["identity"] == "prod/ReadOnlyAccess"
+    assert e["identity"] == "prod.ReadOnlyAccess"
     assert e["account_id"] == "111122223333"
     assert e["allowed"] is True
     assert e["matched_rule"] == "*/ReadOnlyAccess"

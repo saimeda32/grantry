@@ -119,7 +119,7 @@ grantry login --start-url https://your-org.awsapps.com/start --region us-east-1
 
 <span class="c"># generate a policy from your real access, then use any role</span>
 grantry init
-grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls</pre>
+grantry run my-dev.AWSReadOnlyAccess -- aws s3 ls</pre>
     <p>After login, the native <strong>aws</strong> CLI, boto3, and Terraform
     work too. Add a <strong>credential_process</strong> profile if you want every
     native fetch policy checked and audited.</p>
@@ -201,7 +201,7 @@ grantry install cursor     <span class="c"># or a specific one</span></pre>
       ['ok',    'Wrote a starter policy from your 42 identities to ~/.grantry/policy.yaml'],
       ['muted', 'Heads up: this starter is permissive. Edit it to restrict your agents.']
     ]},
-    { p: 'you', cmd: 'grantry run acme-dev/AWSReadOnlyAccess -- aws s3 ls' },
+    { p: 'you', cmd: 'grantry run acme-dev.AWSReadOnlyAccess -- aws s3 ls' },
     { out: [
       ['muted', '2024-08-11 12:04  acme-dev-artifacts'],
       ['muted', '2024-08-11 12:04  acme-dev-terraform-state']
@@ -211,13 +211,13 @@ grantry install cursor     <span class="c"># or a specific one</span></pre>
       ['ok',    'Added grantry to Claude Code. Restart it to load the tools.']
     ]},
     { gap: true },
-    { p: 'agent', cmd: 'get_credentials("acme-dev/AWSReadOnlyAccess", ttl="15m")' },
+    { p: 'agent', cmd: 'get_credentials("acme-dev.AWSReadOnlyAccess", ttl="15m")' },
     { out: [
       ['ok',    'Granted. Expires 12:19. Logged to audit.jsonl.']
     ]},
-    { p: 'agent', cmd: 'get_credentials("acme-prod/AWSAdministratorAccess", ttl="1h")' },
+    { p: 'agent', cmd: 'get_credentials("acme-prod.AWSAdministratorAccess", ttl="1h")' },
     { out: [
-      ['err',   'Denied by policy: deny rule "*prod*/*" matches acme-prod/AWSAdministratorAccess.'],
+      ['err',   'Denied by policy: deny rule "*prod*.*" matches acme-prod.AWSAdministratorAccess.'],
       ['muted', 'No credentials returned. The request is in the audit log.']
     ]}
   ];

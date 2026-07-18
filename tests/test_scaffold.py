@@ -16,7 +16,7 @@ def idents():
 def test_starter_is_permissive():
     out = scaffold_policy(idents(), "2026-07-16")
     allow_section = out.split("deny:")[0]
-    assert '- identity: "*/*"' in allow_section
+    assert '- identity: "*.*"' in allow_section
     assert "PERMISSIVE" in out
 
 
@@ -24,9 +24,9 @@ def test_warns_how_to_restrict():
     out = scaffold_policy(idents(), "2026-07-16")
     assert "Restrict me" in out
     # restrictive rules are offered as commented guidance
-    assert '#   - identity: "*/AWSReadOnlyAccess"' in out
-    assert '#   - identity: "*/AWSAdministratorAccess"' in out
-    assert "acme-prod/*" in out
+    assert '#   - identity: "*.AWSReadOnlyAccess"' in out
+    assert '#   - identity: "*.AWSAdministratorAccess"' in out
+    assert "acme-prod.*" in out
 
 
 def test_lists_all_identities_as_comments():

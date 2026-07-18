@@ -1,17 +1,19 @@
 # grantry policy: what agents and humans may do.
 #
-# Each identity pattern is "account-name/role-name", so you can scope by
-# account, by role, or both. "*" is a wildcard within a segment and does not
-# cross the slash. Deny beats allow. An identity matched by no rule is denied
-# for agents and allowed for humans. TTLs are capped to each section's max_ttl.
+# Each identity pattern is "account-name.role-name" (the same string you type for
+# grantry run and aws --profile), so you can scope by account, by role, or both.
+# "*" is a wildcard within a segment and does not cross the separator. The older
+# "account/role" slash form is still accepted. Deny beats allow. An identity
+# matched by no rule is denied for agents and allowed for humans. TTLs are capped
+# to each section's max_ttl.
 agents:
   allow:
-    - identity: "*/AWSReadOnlyAccess"        # read-only role in ANY account
-    - identity: "sandbox/*"                   # ANY role, but only in the sandbox account
-    - identity: "dev-*/AWSPowerUserAccess"    # power-user role, only in dev-* accounts
+    - identity: "*.AWSReadOnlyAccess"        # read-only role in ANY account
+    - identity: "sandbox.*"                   # ANY role, but only in the sandbox account
+    - identity: "dev-*.AWSPowerUserAccess"    # power-user role, only in dev-* accounts
   deny:
-    - identity: "*prod*/*"                     # nothing at all in production accounts
-    - identity: "*/AWSAdministratorAccess"     # no admin role, in any account
+    - identity: "*prod*.*"                     # nothing at all in production accounts
+    - identity: "*.AWSAdministratorAccess"     # no admin role, in any account
   max_ttl: 15m
 humans:
   max_ttl: 12h

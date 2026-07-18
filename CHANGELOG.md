@@ -4,6 +4,22 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.12.0] - 2026-07-17
+
+### Changed
+- One identity spelling everywhere. An identity is now written `account.role` in
+  `grantry ls`, policy patterns, the audit log, and the `~/.aws/config` profile
+  name grantry writes, so the exact same string works for both `grantry run <id>`
+  and the native `aws --profile <id>`. Previously grantry showed `account/role`
+  while the profile name used `account.role`, which forced you to remember two
+  forms. The dot is the canonical separator; the older `account/role` slash form
+  is still accepted as input and in policy patterns, so existing policies, scripts,
+  and muscle memory keep working. `grantry init` now generates dot-form patterns.
+
+### Fixed
+- `grantry populate` and `login` write `account.role` profile names that match the
+  identity you see in `grantry ls`, removing the earlier `.` vs `/` mismatch.
+
 ## [0.11.1] - 2026-07-17
 
 ### Changed

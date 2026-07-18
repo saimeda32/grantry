@@ -76,7 +76,7 @@ grantry login --start-url https://your-org.awsapps.com/start --region us-east-1
 grantry ls
 
 # 3. Run any command as a role. That is all you need as a human.
-grantry run my-dev/AWSReadOnlyAccess -- aws s3 ls
+grantry run my-dev.AWSReadOnlyAccess -- aws s3 ls
 
 # 4. Optional: only when you want AI agents to use grantry, write a policy
 #    that decides which roles they may assume, then edit it.
@@ -85,8 +85,11 @@ grantry init
 
 `grantry login` also writes matching profiles into `~/.aws/config` for every
 account and role you can reach, so the native `aws` CLI, boto3, and Terraform
-work with no grantry in the loop: just `aws --profile <account>.<role> ...`. Use
-either grantry or the plain AWS tooling, whichever you prefer. It reconciles
+work with no grantry in the loop: just `aws --profile <account>.<role> ...`. The
+identity you type for grantry is the same string as the profile name, so
+`grantry run acme-prod.AWSReadOnlyAccess` and `aws --profile acme-prod.AWSReadOnlyAccess`
+name the exact same thing. Use either grantry or the plain AWS tooling, whichever
+you prefer. It reconciles
 safely and never touches profiles you wrote by hand. Pass `--no-populate` (or set
 `GRANTRY_NO_POPULATE=1`) if you would rather manage `~/.aws/config` yourself and
 run `grantry populate` on demand.
@@ -99,7 +102,7 @@ checked against your policy and written to the audit log, add a
 
 ```ini
 [profile prod-readonly]
-credential_process = grantry credential-process --identity prod/AWSReadOnlyAccess
+credential_process = grantry credential-process --identity prod.AWSReadOnlyAccess
 region = us-east-1
 ```
 
@@ -110,7 +113,7 @@ a sandboxed agent: give the sandbox only a `credential_process` profile with
 
 ### Tab-complete your identities
 
-You do not have to type `account/role` by hand. `pipx` and `pip` cannot set up
+You do not have to type `account.role` by hand. `pipx` and `pip` cannot set up
 shell completion for you, so grantry does it in one command:
 
 ```bash
@@ -199,22 +202,24 @@ access. See [examples/policy.yaml](examples/policy.yaml).
 ```yaml
 agents:
   allow:
-    - identity: "*/AWSReadOnlyAccess"        # read-only role in ANY account
-    - identity: "sandbox/*"                   # ANY role, but only in the sandbox account
-    - identity: "dev-*/AWSPowerUserAccess"    # power-user role, only in dev-* accounts
+    - identity: "*.AWSReadOnlyAccess"        # read-only role in ANY account
+    - identity: "sandbox.*"                   # ANY role, but only in the sandbox account
+    - identity: "dev-*.AWSPowerUserAccess"    # power-user role, only in dev-* accounts
   deny:
-    - identity: "*prod*/*"                     # nothing at all in production accounts
-    - identity: "*/AWSAdministratorAccess"     # no admin role, in any account
+    - identity: "*prod*.*"                     # nothing at all in production accounts
+    - identity: "*.AWSAdministratorAccess"     # no admin role, in any account
   max_ttl: 15m
 humans:
   max_ttl: 12h
 ```
 
-Every identity is `account-name/role-name`, so you scope by account, by role,
-or both. `*` is a wildcard within a segment and does not cross the slash, so
-`sandbox/*` means every role in the `sandbox` account, `*/AWSReadOnlyAccess`
-means the read-only role in every account, and `dev-*/AWSPowerUserAccess` means
-that role only in accounts whose name starts with `dev`.
+Every identity is `account-name.role-name` (the same string you type for
+`grantry run` and `aws --profile`), so you scope by account, by role, or both.
+`*` is a wildcard within a segment and does not cross the separator, so
+`sandbox.*` means every role in the `sandbox` account, `*.AWSReadOnlyAccess`
+means the read-only role in every account, and `dev-*.AWSPowerUserAccess` means
+that role only in accounts whose name starts with `dev`. The older `account/role`
+slash form is still accepted, so existing policies keep working.
 
 Three rules govern it:
 
@@ -292,7 +297,7 @@ Everything survives reboots. To remove grantry state: `grantry logout` and
 
 Read this honestly before relying on grantry as a control: the policy gate only
 covers the MCP door. An agent that also has a shell could otherwise run
-`grantry run <account/role>` (evaluated as a trusted human) or, if you have run
+`grantry run <account.role>` (evaluated as a trusted human) or, if you have run
 `grantry populate`, use `aws --profile ...` directly, bypassing the gate. Set
 `GRANTRY_CALLER=agent` in the agent's environment so every grantry command is
 evaluated under your deny-by-default `agents` policy, and run the agent with no

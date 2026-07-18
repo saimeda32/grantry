@@ -80,10 +80,10 @@ agents and one for you.
 ```yaml
 agents:
   allow:
-    - identity: "*/AWSReadOnlyAccess"        # read only role in any account
-    - identity: "dev-*/AWSPowerUserAccess"   # power user, but only in dev accounts
+    - identity: "*.AWSReadOnlyAccess"        # read only role in any account
+    - identity: "dev-*.AWSPowerUserAccess"   # power user, but only in dev accounts
   deny:
-    - identity: "*prod*/*"                    # nothing at all in a prod account
+    - identity: "*prod*.*"                    # nothing at all in a prod account
   max_ttl: 15m                                # agent credentials last at most 15 minutes
 humans:
   max_ttl: 12h
@@ -106,9 +106,11 @@ your rule says fifteen minutes, grantry requests the shorter cap. If the policy
 file is missing or broken, agents get nothing (humans still work), so a mistake
 fails safe.
 
-An identity is written as `account-name/role-name`, and `*` is a wildcard within
-a segment (it does not cross the slash), so `dev-*/AWSReadOnlyAccess` means "read
-only in any account whose name starts with dev".
+An identity is written as `account-name.role-name` (the same string you type for
+`grantry run` and `aws --profile`), and `*` is a wildcard within a segment (it
+does not cross the separator), so `dev-*.AWSReadOnlyAccess` means "read only in
+any account whose name starts with dev". The older `account/role` slash form is
+still accepted.
 
 ## The audit log
 
@@ -128,11 +130,11 @@ any time with `grantry audit`.
   log in to the whole Identity Center at once, not to a single account.
 
 - **`grantry ls`**
-  Lists every account and role you can use, one `account/role` per line.
+  Lists every account and role you can use, one `account.role` per line.
 
 - **`grantry run <identity> -- <command>`**
   Runs a single command as a chosen identity without changing anything else, for
-  example `grantry run prod/AWSReadOnlyAccess -- aws s3 ls`.
+  example `grantry run prod.AWSReadOnlyAccess -- aws s3 ls`.
 
 - **`grantry switch [identity]`**
   Prints shell exports to adopt an identity for the rest of your session. Omit

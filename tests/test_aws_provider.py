@@ -48,10 +48,10 @@ def test_device_flow_then_mint():
 
         idents = provider.list_identities(session)
         keys = {i.key for i in idents}
-        assert "prod/ReadOnlyAccess" in keys
-        assert "prod/AWSPowerUserAccess" in keys
+        assert "prod.ReadOnlyAccess" in keys
+        assert "prod.AWSPowerUserAccess" in keys
 
-        prod_ro = next(i for i in idents if i.key == "prod/ReadOnlyAccess")
+        prod_ro = next(i for i in idents if i.key == "prod.ReadOnlyAccess")
         creds = provider.mint(session, prod_ro, ttl=900)
         assert creds.access_key_id == "AKIAFAKE"
         assert creds.session_token == "faketoken"

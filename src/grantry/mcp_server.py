@@ -174,7 +174,7 @@ def build_mcp(broker: Broker, caller_label: str = "agent") -> FastMCP:
 
     @mcp.tool()
     def list_identities() -> str:
-        """List the account/role identities available through Identity Center."""
+        """List the account.role identities available through Identity Center."""
         try:
             idents = broker.identities()
         except NoSessionError:
