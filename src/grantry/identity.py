@@ -73,7 +73,11 @@ def matches(pattern: str, ident: Identity) -> bool:
         acct_pat, role_pat = pat.split("/", 1)
     elif "." in pat:
         acct_pat, role_pat = pat.split(".", 1)
-    if acct_pat is not None and role_pat is not None:
-        if fnmatch.fnmatch(acct, acct_pat) and fnmatch.fnmatch(role, role_pat):
-            return True
+    if (
+        acct_pat is not None
+        and role_pat is not None
+        and fnmatch.fnmatch(acct, acct_pat)
+        and fnmatch.fnmatch(role, role_pat)
+    ):
+        return True
     return fnmatch.fnmatch(key, pat)
