@@ -351,6 +351,12 @@ def _run(argv: list[str] | None = None) -> int:
         "clients", nargs="*", help="claude-code, cursor, vscode, ... (blank = all found)"
     )
     p_install.add_argument("--dry-run", action="store_true")
+    p_install.add_argument(
+        "--gated",
+        action="store_true",
+        help="also write project-scope files that make grantry the agent's only "
+        "credential source (blanks ambient AWS env + a steering note)",
+    )
     p_uninstall = sub.add_parser("uninstall", help="remove grantry from an AI client's MCP config")
     p_uninstall.add_argument(
         "clients", nargs="*", help="claude-code, cursor, ... (blank = all found)"
@@ -455,7 +461,7 @@ def _run(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "install":
-        return _cmd_install(args.clients, args.dry_run)
+        return _cmd_install(args.clients, args.dry_run, args.gated)
 
     if args.command == "uninstall":
         return _cmd_uninstall(args.clients)
@@ -1160,7 +1166,62 @@ def _cmd_status(broker: Broker) -> int:
     return 0
 
 
-def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
+def _apply_gating(client_key: str, dry_run: bool) -> None:
+    """Write the project-scope gating files for one client: blank the agent
+    shell's ambient AWS env and drop a steering note. Idempotent; scoped to the
+    current directory. Prints what it did (or a note when it can do nothing).
+    """
+    import json
+
+    from grantry.gating import (
+        append_steering,
+        gating_plan,
+        merge_env_claude,
+        merge_env_vscode,
+        steering_body,
+        steering_mdc,
+    )
+
+    plan = gating_plan(client_key)
+    if plan.note:
+        print(f"  gated: {plan.note}")
+    for action in plan.actions:
+        path = action.path
+        if dry_run:
+            print(f"  [dry-run] gated: would update {path}")
+            continue
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        if action.kind in ("env-claude", "env-vscode"):
+            config: dict[str, Any] = {}
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as fh:
+                    body = fh.read().strip()
+                    config = json.loads(body) if body else {}
+            merged = (
+                merge_env_claude(config)
+                if action.kind == "env-claude"
+                else merge_env_vscode(config)
+            )
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(merged, fh, indent=2)
+                fh.write("\n")
+            print(f"  gated: blanked ambient AWS env in {path}")
+        else:  # steer-md / steer-mdc
+            existing = ""
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as fh:
+                    existing = fh.read()
+            block = steering_mdc() if action.kind == "steer-mdc" else steering_body()
+            new_text, changed = append_steering(existing, block)
+            if changed:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(new_text)
+                print(f"  gated: added a grantry steering note to {path}")
+            else:
+                print(f"  gated: steering note already present in {path}")
+
+
+def _cmd_install(client_keys: list[str], dry_run: bool, gated: bool = False) -> int:
     import json
 
     saved = load_instance()
@@ -1201,12 +1262,16 @@ def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
         merged = merge_server(config, client.root, "grantry", client_entry)
         if dry_run:
             print(f"[dry-run] would write grantry to {client.label} at {path}")
+            if gated:
+                _apply_gating(client.key, dry_run=True)
             continue
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(merged, fh, indent=2)
             fh.write("\n")
         print(f"Added grantry to {client.label} ({path}). Restart {client.label} to load it.")
+        if gated:
+            _apply_gating(client.key, dry_run=False)
         changed += 1
     if changed and not dry_run:
         policy = state_path("policy.yaml")
@@ -1216,8 +1281,18 @@ def _cmd_install(client_keys: list[str], dry_run: bool) -> int:
             print("edit it to allow the accounts and roles they may use.")
         else:
             print(f"Agents follow the policy at {policy}. Edit it to change what they may use.")
-        print("If the agent also has a shell, set GRANTRY_CALLER=agent in its environment and run")
-        print("'grantry check --sandbox' inside it so the policy is a real boundary.")
+        if gated:
+            print()
+            print("Gated: this project's agent shell has its ambient AWS credentials blanked, so")
+            print("grantry is its only credential source. Do NOT run 'grantry populate' for this")
+            print("agent (populated ~/.aws/config profiles are reachable via 'aws --profile' and")
+            print("would defeat the gate). This raises the bar but is not airtight: it cannot")
+            print("remove ~/.aws/credentials, the SSO cache, or an instance role. For a hard")
+            print("boundary, run the agent with no ambient AWS access at all.")
+        else:
+            print("If the agent also has a shell, set GRANTRY_CALLER=agent in its environment and")
+            print("run 'grantry check --sandbox' inside it so the policy is a real boundary. Or")
+            print("re-run with '--gated' to write that plus credential starvation automatically.")
     if not start_url:
         print(
             "\nNote: no Identity Center instance saved yet. Run "

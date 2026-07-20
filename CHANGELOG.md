@@ -4,6 +4,21 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.13.0] - 2026-07-20
+
+### Added
+- `grantry install --gated` makes grantry the agent's only credential source by
+  writing project-scope files: it blanks the ambient `AWS_*` variables in the
+  agent's own shell and sets `GRANTRY_CALLER=agent`, and adds a short steering
+  note telling the agent to fetch credentials via the `get_credentials` MCP tool.
+  It does not ban the `aws` command (the agent still runs `aws`/boto3, just only
+  with brokered credentials). Written per client where supported (Claude Code
+  `settings.json`, the VS Code forks' `terminal.integrated.env`); Copilot CLI and
+  Claude Desktop get the steering note only. All writes are idempotent and scoped
+  to the current directory. This is defense-in-depth, not a guarantee: it cannot
+  remove `~/.aws/credentials`, the SSO cache, or an instance role, and the command
+  says so plainly.
+
 ## [0.12.0] - 2026-07-17
 
 ### Changed

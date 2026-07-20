@@ -182,6 +182,7 @@ One command wires grantry into your AI clients:
 grantry install            # auto detect every client you have
 grantry install cursor     # or a specific one
 grantry install --dry-run  # preview without writing
+grantry install --gated    # also make grantry the agent's only credential source
 ```
 
 Supported: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vscode`,
@@ -193,6 +194,33 @@ The agent then has four tools: `whoami`, `list_identities`,
 `get_credentials(identity, ttl)`, and `check_access(identity)`. If no one is
 logged in, the agent can call `request_login`, which notifies you and waits for
 your approval, then resumes on its own.
+
+### Make grantry the agent's only credential source
+
+The MCP server is an audited, policy-checked path, but by itself it does not stop
+an agent with a shell from using ambient credentials (a populated `aws --profile`,
+`AWS_*` env vars, an instance role) and skipping the gate. `--gated` writes
+project-scope files that close the easy paths:
+
+```bash
+grantry install claude-code --gated   # run inside the repo you want gated
+```
+
+It blanks the ambient `AWS_*` variables in the agent's own shell and sets
+`GRANTRY_CALLER=agent` (so any `grantry run` it shells out to is deny-by-default),
+and drops a short steering note telling the agent to fetch credentials through
+`get_credentials`. It does **not** ban the `aws` command: the agent still runs
+`aws`/boto3, just only ever with the short-lived, policy-checked credentials
+grantry issues. It is written per client where that client allows it (Claude Code
+`settings.json`, the VS Code forks' `terminal.integrated.env`); Copilot CLI and
+Claude Desktop get the steering note only.
+
+This is defense-in-depth, not a guarantee. It cannot remove `~/.aws/credentials`,
+the SSO token cache, or an instance role, and it does not control network egress.
+Do not run `grantry populate` for a gated agent (those profiles are reachable via
+`aws --profile` and would defeat it). For a hard boundary, run the agent with no
+ambient AWS access at all (a container or separate user), with grantry as the only
+source.
 
 ## Policy
 
