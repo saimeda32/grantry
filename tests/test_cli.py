@@ -326,7 +326,7 @@ def test_admin_conflicting_modes_rejected(tmp_path, monkeypatch, capsys):
     rc = main(["admin", "assignments", "--as", "x/y", "--snapshot", "--diff"])
     out = capsys.readouterr().out
     assert rc == 2
-    assert "only one" in out.lower()
+    assert "cannot combine" in out.lower()
 
 
 def test_switch_prints_exports(tmp_path, monkeypatch, capsys):

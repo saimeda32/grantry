@@ -6,10 +6,22 @@ Values are HTML-escaped since account, role, and agent names are external data.
 from __future__ import annotations
 
 import html
+from dataclasses import dataclass
 from typing import Any
 
 from grantry.admin import Assignment, Enrichment
 from grantry.graphdata import AccessSurface
+
+
+@dataclass(frozen=True)
+class GraphDiff:
+    """A snapshot comparison to overlay on the access graph: which current
+    assignments are newly added, which are gone, and a label for the baseline."""
+
+    added: list[Assignment]
+    removed: list[Assignment]
+    since: str
+
 
 _STYLE = """
 :root {
@@ -118,32 +130,42 @@ def _escape_for_script(serialized: str) -> str:
     return out
 
 
+def _row(a: Assignment, status: str) -> list[str]:
+    return [
+        a.principal_type,
+        a.principal_name,
+        a.permission_set_name,
+        a.account_id,
+        a.account_name,
+        a.account_env,
+        status,
+    ]
+
+
 def render_assignments(
     assignments: list[Assignment],
     generated_on: str,
     enrichment: Enrichment | None = None,
     crawled_as: str | None = None,
+    diff: GraphDiff | None = None,
 ) -> str:
     """Render the interactive node-link access graph: principals -> permission
     sets -> accounts with connecting lines, hover, click-to-trace, search, and a
     table view. Self-contained (no external requests). The proven template is
     bundled as package data; here we inject the rows, date, and optional
     enrichment (group members, permission-set details, account OUs).
+
+    When `diff` is given, each row is tagged with its change status (added rows are
+    highlighted green on the graph), removed access is listed as a ghost overlay,
+    and a change banner shows the counts since the baseline.
     """
     import json
     import pkgutil
 
-    rows = [
-        [
-            a.principal_type,
-            a.principal_name,
-            a.permission_set_name,
-            a.account_id,
-            a.account_name,
-            a.account_env,
-        ]
-        for a in assignments
-    ]
+    from grantry.snapshots import assignment_key
+
+    added_keys = {assignment_key(a) for a in diff.added} if diff else set()
+    rows = [_row(a, "added" if assignment_key(a) in added_keys else "") for a in assignments]
 
     def inject_json(obj: Any) -> str:
         return _escape_for_script(json.dumps(obj, separators=(",", ":")))
@@ -151,6 +173,14 @@ def render_assignments(
     members = enrichment.group_members if enrichment else {}
     psets = enrichment.permission_sets if enrichment else {}
     account_ou = enrichment.account_ou if enrichment else {}
+
+    # The change overlay: removed rows to draw as ghosts, plus a summary banner.
+    removed_rows = [_row(a, "removed") for a in diff.removed] if diff else []
+    diff_summary = (
+        {"added": len(diff.added), "removed": len(diff.removed), "since": diff.since}
+        if diff
+        else None
+    )
 
     raw = pkgutil.get_data(__package__, _GRAPH_TEMPLATE)
     if raw is None:
@@ -167,6 +197,12 @@ def render_assignments(
     )
     html = html.replace(
         "const ACCT_OU = /*ACCT_OU*/{};", "const ACCT_OU = " + inject_json(account_ou) + ";"
+    )
+    html = html.replace(
+        "const REMOVED = /*REMOVED*/[];", "const REMOVED = " + inject_json(removed_rows) + ";"
+    )
+    html = html.replace(
+        "const DIFF = /*DIFF*/null;", "const DIFF = " + inject_json(diff_summary) + ";"
     )
     html = html.replace("/*CRAWLED_AS*/", _escape_for_script(crawled_as or ""))
     html = html.replace("/*DATE*/", generated_on)

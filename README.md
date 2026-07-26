@@ -168,7 +168,7 @@ already remembered always wins.
 | `grantry graph` | Write an HTML map of what your agents can reach under the policy. |
 | `grantry mcp` | Run grantry as an MCP server for agents. |
 | `grantry install [client]` | Add grantry to an AI client's MCP config. Auto detects all if none named. |
-| `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. Add `--snapshot` to save it, or `--diff` to see what changed since the last snapshot. |
+| `grantry admin assignments --as <id>` | Crawl who has what across the whole org. Admin only. Add `--snapshot` to save it, `--diff` to see what changed since the last snapshot, or `--visualize --diff` to highlight the change on the graph. |
 | `grantry logout` | Clear the saved session for the current instance. |
 | `grantry instances` / `grantry use <name>` | List remembered orgs, or switch between them. |
 | `grantry install` / `grantry uninstall` | Add or remove grantry from an AI client's MCP config. |
@@ -299,7 +299,12 @@ The graph is built for an access review, not just a picture:
 - **Export** the assignments as CSV or the graph as SVG.
 
 Use `--snapshot` to save a crawl and `--diff` to see what changed since the last
-one.
+one. Add `--visualize --diff` to render the change **on the graph**: newly added
+access is ringed green, removed access is drawn as red dashed lines between the
+nodes that remain, and a banner plus a "Removed access" list summarize what
+changed since the baseline.
+
+![Access graph snapshot diff](docs/access-graph-diff.png)
 
 ## How your data is stored
 

@@ -345,7 +345,9 @@ def _run(argv: list[str] | None = None) -> int:
         "--snapshot", action="store_true", help="save this crawl for later comparison"
     )
     p_assign.add_argument(
-        "--diff", action="store_true", help="compare this crawl to the last snapshot"
+        "--diff",
+        action="store_true",
+        help="compare this crawl to the last snapshot (add --visualize to show it on the graph)",
     )
     p_install = sub.add_parser(
         "install", help="add grantry to an AI client's MCP config (auto-detects all if none named)"
@@ -539,12 +541,15 @@ def _run(argv: list[str] | None = None) -> int:
 
     # Pure argument validation runs before the session gate, so a usage mistake
     # is reported as such (exit 2) rather than triggering a login first.
+    # --diff and --visualize combine (render the change overlay on the graph);
+    # --snapshot only saves and cannot combine with either.
     if (
         args.command == "admin"
         and args.admin_command == "assignments"
-        and sum([args.snapshot, args.diff, args.visualize]) > 1
+        and args.snapshot
+        and (args.diff or args.visualize)
     ):
-        print("Pick only one of --snapshot, --diff, or --visualize.")
+        print("--snapshot only saves a baseline; it cannot combine with --diff or --visualize.")
         return 2
 
     # A command that needs a session but has none logs the user in first, rather
@@ -668,7 +673,7 @@ def _cmd_admin_assignments(
         return 1
     print("", file=_sys.stderr)
 
-    if diff:
+    if diff and not visualize:
         from grantry.snapshots import diff_assignments, latest_snapshot, save_snapshot
 
         previous = latest_snapshot()
@@ -696,7 +701,32 @@ def _cmd_admin_assignments(
 
     if visualize:
         from grantry.admin import crawl_enrichment
-        from grantry.render import render_assignments
+        from grantry.render import GraphDiff, render_assignments
+
+        # With --diff, overlay the change since the last snapshot on the graph and
+        # save this crawl as the new baseline. With no earlier snapshot, render the
+        # plain graph and save the baseline for next time.
+        graph_diff = None
+        if diff:
+            from grantry.snapshots import (
+                diff_assignments,
+                latest_snapshot,
+                latest_snapshot_name,
+                save_snapshot,
+            )
+
+            previous = latest_snapshot()
+            if previous is None:
+                print(
+                    "No earlier snapshot to compare against; rendering the plain graph "
+                    "and saving this as the baseline.",
+                    file=_sys.stderr,
+                )
+            else:
+                since = latest_snapshot_name() or ""
+                added, removed = diff_assignments(previous, assignments)
+                graph_diff = GraphDiff(added=added, removed=removed, since=since[:10] or since)
+            save_snapshot(assignments, _iso_now().replace(":", "-"))
 
         # Gather the extra context (group members, permission-set details, OUs).
         # Best effort: if it fails or is partial, the graph still renders. Report
@@ -720,11 +750,14 @@ def _cmd_admin_assignments(
                     file=_sys.stderr,
                 )
         html = render_assignments(
-            assignments, _iso_now()[:10], enrichment=enrichment, crawled_as=ident
+            assignments, _iso_now()[:10], enrichment=enrichment, crawled_as=ident, diff=graph_diff
         )
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(html)
-        print(f"Wrote {len(assignments)} assignments to {_file_link(out)}")
+        suffix = ""
+        if graph_diff is not None:
+            suffix = f" (+{len(graph_diff.added)} added, -{len(graph_diff.removed)} removed)"
+        print(f"Wrote {len(assignments)} assignments to {_file_link(out)}{suffix}")
         return 0
 
     print("principal_type,principal_name,permission_set,account_id,account_name")

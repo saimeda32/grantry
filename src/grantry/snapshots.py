@@ -13,10 +13,15 @@ from grantry.admin import Assignment
 from grantry.config import grantry_home
 
 
-def _key(a: Assignment) -> tuple[str, str, str, str]:
-    # An assignment's identity for diffing: who, which permission set, which
-    # account. The human-readable names are what an operator reviews.
+def assignment_key(a: Assignment) -> tuple[str, str, str, str]:
+    """An assignment's identity for diffing: who, which permission set, which
+    account. The human-readable names are what an operator reviews. Public so the
+    graph renderer can tag each row as added/unchanged with the same key."""
     return (a.principal_type, a.principal_name, a.permission_set_name, a.account_id)
+
+
+# Backwards-compatible private alias.
+_key = assignment_key
 
 
 def diff_assignments(
@@ -56,3 +61,10 @@ def latest_snapshot() -> list[Assignment] | None:
     if not files:
         return None
     return _load(files[-1])
+
+
+def latest_snapshot_name() -> str | None:
+    """The timestamp label of the most recent snapshot (its filename stem), or
+    None if there are none. Used to label a diff ('changes since ...')."""
+    files = sorted(_snapshot_dir().glob("*.json"))
+    return files[-1].stem if files else None

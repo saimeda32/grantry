@@ -185,6 +185,20 @@
   #tableview .tag { font-size: 11px; color: var(--ink-2); }
   .count-note { color: var(--ink-muted); font-size: 12px; margin: 8px 2px 0; }
 
+  /* --- snapshot diff overlay --- */
+  .edge.added { stroke: #1baf7a; opacity: 0.95; }
+  .edge.removed { stroke: #d7263d; stroke-dasharray: 3 3; opacity: 0.75; }
+  .addring { fill: none; stroke: #1baf7a; stroke-width: 1.6px; }
+  #diffbanner { display: none; margin: 0 0 14px; padding: 9px 14px; border-radius: 9px;
+    background: var(--surface-1); border: 1px solid var(--baseline); font-size: 13px; color: var(--ink-1); }
+  #diffbanner .add { color: #1baf7a; font-weight: 650; }
+  #diffbanner .rem { color: #d7263d; font-weight: 650; }
+  #removedcard { display: none; margin-top: 14px; }
+  #removedcard h2 { font-size: 14px; font-weight: 650; margin: 0 0 8px; }
+  #removedcard ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 26px; }
+  #removedcard li { font-size: 12.5px; padding: 2px 0; color: var(--ink-2); break-inside: avoid; overflow-wrap: anywhere; }
+  #removedcard li b { color: var(--ink-1); font-weight: 600; }
+
   /* --- enhancement toolbar: filters, export, theme --- */
   .toolbar { display: flex; gap: 8px 10px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
   .toolbar .group { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -217,6 +231,8 @@
   <p>Who can reach what: principals → permission sets → AWS accounts. Source: <code>grantry admin assignments</code>, snapshot <span id="snapshot-date">/*DATE*/</span><span id="crawled-as"></span>.</p>
 </header>
 
+<div id="diffbanner"></div>
+
 <div class="kpis" id="kpis"></div>
 
 <div class="controls">
@@ -243,6 +259,10 @@
       </table>
       <p class="count-note" id="tcount"></p>
     </div>
+    <div class="card" id="removedcard">
+      <h2>Removed access since the baseline</h2>
+      <ul id="removedlist"></ul>
+    </div>
   </div>
   <aside class="panel" id="panel">
     <p class="hint">Click any group, user, permission set, or account to see its full access paths here.</p>
@@ -253,10 +273,13 @@
 
 <script>
 const DATA = /*DATA*/[];
-// rows: [principal_type, principal_name, permission_set, account_id, account_name, account_env]
+// rows: [principal_type, principal_name, permission_set, account_id, account_name, account_env, status]
+// status is "added" (new since the baseline) or "" in a diff render; "" otherwise.
 const MEMBERS = /*MEMBERS*/{};    // group display name -> [member user names]
 const PSET_META = /*PSET_META*/{}; // permission set name -> {session_duration, managed:[], inline, description}
 const ACCT_OU = /*ACCT_OU*/{};    // account name -> Organizational Unit name
+const REMOVED = /*REMOVED*/[];    // rows present in the baseline but gone now (ghosts), same shape as DATA
+const DIFF = /*DIFF*/null;        // {added, removed, since} when this is a snapshot-diff render, else null
 const CRAWLED_AS = "/*CRAWLED_AS*/"; // the identity the crawl ran as
 
 const ADMIN_PS = /Administrator|OrganizationsFullAccess|SuperAdmin/;
@@ -272,6 +295,9 @@ for (const r of DATA) {
   if (!nodes.has(ak)) nodes.set(ak, { key: ak, kind: "A", name: aname, id: aid, rows: [] });
   nodes.get(pk).rows.push(r); nodes.get(sk).rows.push(r); nodes.get(ak).rows.push(r);
 }
+// A node is "added" (ringed green) only when every one of its assignments is new
+// since the baseline, i.e. it is a wholly new principal, permission set, or account.
+for (const n of nodes.values()) n.added = !!DIFF && n.rows.length > 0 && n.rows.every(r => r[6] === "added");
 const principals = [...nodes.values()].filter(n => n.kind === "P").sort((a,b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
 const psets      = [...nodes.values()].filter(n => n.kind === "S").sort((a,b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
 const accounts   = [...nodes.values()].filter(n => n.kind === "A").sort((a,b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
@@ -280,8 +306,8 @@ const eLeft = new Map(), eRight = new Map();
 for (const r of DATA) {
   const pk = nkey("P", r[1]), sk = nkey("S", r[2]), ak = nkey("A", r[4]);
   const lk = pk + "→" + sk, rk = sk + "→" + ak;
-  eLeft.set(lk, (eLeft.get(lk) || { a: pk, b: sk, n: 0 }));  eLeft.get(lk).n++;
-  eRight.set(rk, (eRight.get(rk) || { a: sk, b: ak, n: 0 })); eRight.get(rk).n++;
+  const le = eLeft.get(lk) || { a: pk, b: sk, n: 0, add: 0 };  le.n++; if (r[6] === "added") le.add++; eLeft.set(lk, le);
+  const re = eRight.get(rk) || { a: sk, b: ak, n: 0, add: 0 }; re.n++; if (r[6] === "added") re.add++; eRight.set(rk, re);
 }
 
 // ---------- KPIs ----------
@@ -307,7 +333,10 @@ for (const [v, k, c, style] of kpis) {
 }
 
 // ---------- graph geometry ----------
-const ROW = 24, PAD_TOP = 64, PAD_BOT = 20;
+// Row pitch. A permission-set node stacks a label above its dot and an
+// ADMIN-LEVEL badge below, so it needs ~30px of vertical room; 24 caused those
+// to overlap the neighbouring row on dense graphs.
+const ROW = 32, PAD_TOP = 64, PAD_BOT = 20;
 const H = PAD_TOP + Math.max(principals.length, psets.length, accounts.length) * ROW + PAD_BOT;
 const LABEL_W = 320;
 const XP = 366, XS = 680, XA = 990, W = 1340;
@@ -359,13 +388,35 @@ function drawEdges(map) {
     const a = nodes.get(e.a), b = nodes.get(e.b);
     const p = el("path", {
       d: curve(a.x + 9, a.y, b.x - 9, b.y),
-      class: "edge", "stroke-width": Math.min(1 + Math.sqrt(e.n) * 0.55, 4).toFixed(2),
+      // A wholly-new assignment path is drawn green; mixed/unchanged stay neutral.
+      class: (DIFF && e.n > 0 && e.add === e.n) ? "edge added" : "edge",
+      "stroke-width": Math.min(1 + Math.sqrt(e.n) * 0.55, 4).toFixed(2),
     });
     edgeLayer.append(p); edgeEls.set(k, p);
   }
 }
 drawEdges(eLeft);
 drawEdges(eRight);
+
+// Removed access, drawn as red dashed "ghost" lines between nodes that still
+// exist. Access whose principal/account is entirely gone has no node to anchor
+// to, so it is not drawn here; it is always in the "Removed access" list.
+if (DIFF && REMOVED.length) {
+  const ghost = new Map();
+  for (const r of REMOVED) {
+    const pk = nkey("P", r[1]), sk = nkey("S", r[2]), ak = nkey("A", r[4]);
+    const lk = pk + "→" + sk, rk = sk + "→" + ak;
+    // Only ghost a segment that no longer has ANY live access. If the same
+    // principal→pset (or pset→account) edge still exists through another row,
+    // a red dashed line on top of the live edge would overstate the removal.
+    if (nodes.has(pk) && nodes.has(sk) && !eLeft.has(lk)) ghost.set(lk, { a: pk, b: sk });
+    if (nodes.has(sk) && nodes.has(ak) && !eRight.has(rk)) ghost.set(rk, { a: sk, b: ak });
+  }
+  for (const e of ghost.values()) {
+    const a = nodes.get(e.a), b = nodes.get(e.b);
+    edgeLayer.append(el("path", { d: curve(a.x + 9, a.y, b.x - 9, b.y), class: "edge removed" }));
+  }
+}
 
 // nodes
 const nodeEls = new Map();
@@ -389,6 +440,7 @@ function makeNode(n) {
   }
   g.append(el("circle", { cx: n.x, cy: n.y, r: 9, class: "hitring" }));
   g.append(el("circle", { cx: n.x, cy: n.y, r: 9, class: "selring" }));
+  if (n.added) g.append(el("circle", { cx: n.x, cy: n.y, r: 8, class: "addring" }));
 
   const label = el("text", { y: n.y + 4, class: "nodelabel" });
   if (n.kind === "P") {
@@ -864,6 +916,31 @@ bSvg.addEventListener("click", () => {
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
   download("grantry-access-graph.svg", "image/svg+xml", xml);
 });
+
+// ---- snapshot diff: change banner + removed-access list ----
+if (DIFF) {
+  const banner = document.getElementById("diffbanner");
+  const ghostNote = REMOVED.length ? " and listed below" : "";
+  // Counts are integers and the note is static; the baseline label is the only
+  // free text, injected via textContent so external data can never inject markup.
+  banner.innerHTML = '<b>Changes since <span id="diffsince"></span>:</b> '
+    + '<span class="add">+' + DIFF.added + ' added</span>, '
+    + '<span class="rem">−' + DIFF.removed + ' removed</span>. '
+    + 'New access is ringed green; removed access is shown as red dashed lines' + ghostNote + '.';
+  document.getElementById("diffsince").textContent = DIFF.since;
+  banner.style.display = "block";
+  if (REMOVED.length) {
+    const list = document.getElementById("removedlist");
+    const bold = t => { const b = document.createElement("b"); b.textContent = t; return b; };
+    for (const r of REMOVED) {
+      const li = document.createElement("li");
+      li.append(bold(r[1]), document.createTextNode(" lost "), bold(r[2]),
+                document.createTextNode(" on "), bold(r[4]));
+      list.append(li);
+    }
+    document.getElementById("removedcard").style.display = "block";
+  }
+}
 
 // ---- enrichment: crawl provenance, group members, permission-set details, OU ----
 if (CRAWLED_AS) {

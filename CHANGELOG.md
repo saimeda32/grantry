@@ -4,6 +4,24 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.15.0] - 2026-07-26
+
+### Added
+- Access changes on the graph. `grantry admin assignments --visualize --diff`
+  crawls, compares to the last snapshot, and renders the change on the access
+  graph: newly added access is ringed green, removed access is drawn as red
+  dashed "ghost" lines between the nodes that remain, and a banner plus a
+  "Removed access" list summarize what changed since the baseline. It saves the
+  new crawl as the next baseline. Without an earlier snapshot it renders the
+  plain graph and saves the baseline.
+
+### Changed
+- More vertical room between graph nodes (row pitch 24 -> 32), so permission-set
+  labels and the ADMIN-LEVEL badge no longer overlap neighbouring rows on dense
+  graphs.
+- `--diff` now combines with `--visualize` (previously they were mutually
+  exclusive). `--snapshot` still stands alone.
+
 ## [0.14.0] - 2026-07-25
 
 ### Added

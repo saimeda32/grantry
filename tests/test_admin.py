@@ -207,6 +207,38 @@ def test_no_instances_returns_empty():
     assert crawl_assignments(lambda n: NoInst()) == []
 
 
+def test_render_without_diff_has_null_diff():
+    from grantry.admin import Assignment
+
+    rows = [Assignment("GROUP", "g1", "Platform", "AWSReadOnlyAccess", "111", "acme-dev", "")]
+    html = render_assignments(rows, "2026-07-16")
+    assert "const DIFF = null;" in html
+    assert "const REMOVED = [];" in html
+
+
+def test_render_with_diff_tags_added_and_lists_removed():
+    # Assignment fields: type, principal_id, principal_name, permission_set,
+    # account_id, account_name, account_env.
+    from grantry.admin import Assignment
+    from grantry.render import GraphDiff
+
+    current = [
+        Assignment("GROUP", "g1", "Platform", "AWSReadOnlyAccess", "111", "acme-dev", ""),
+        Assignment("GROUP", "g2", "Data", "AWSPowerUserAccess", "222", "acme-prod", "prod"),
+    ]
+    added = [current[1]]  # Data's access is new since the baseline
+    removed = [Assignment("USER", "u1", "jordan", "AWSAdministratorAccess", "333", "acme-old", "")]
+    html = render_assignments(
+        current, "2026-07-16", diff=GraphDiff(added=added, removed=removed, since="2026-07-01")
+    )
+    # The added assignment is tagged "added"; the change summary and the removed
+    # ghost row are injected.
+    assert '"added"' in html
+    assert '"since":"2026-07-01"' in html
+    assert '"added":1' in html and '"removed":1' in html
+    assert "jordan" in html and "acme-old" in html  # removed access carried into REMOVED
+
+
 def test_render_assignments_is_interactive_graph():
     from grantry.admin import Assignment
 
