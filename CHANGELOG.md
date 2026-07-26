@@ -4,6 +4,16 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.16.0] - 2026-07-26
+
+### Changed
+- Fast login on large organizations. `grantry login` now returns as soon as you
+  are authenticated and loads your roles (and, unless `--no-populate`, your
+  `~/.aws/config` profiles) in a detached background process, so a big org no
+  longer makes you wait at the browser step. The roles and profiles land a moment
+  later. Pass `--wait` to load them before the command returns (the default in a
+  non-interactive context such as CI or a script, so nothing depends on timing).
+
 ## [0.15.0] - 2026-07-26
 
 ### Added

@@ -94,6 +94,12 @@ safely and never touches profiles you wrote by hand. Pass `--no-populate` (or se
 `GRANTRY_NO_POPULATE=1`) if you would rather manage `~/.aws/config` yourself and
 run `grantry populate` on demand.
 
+On a large organization, listing every role and writing every profile can take a
+moment, so `grantry login` does it in the background and returns as soon as you
+are authenticated; your roles and profiles land a moment later. Pass `--wait` to
+load them before the command returns (this is automatic in a non-interactive
+context such as CI, so nothing depends on timing).
+
 ### Route native tools through grantry (audited)
 
 If you want every native credential fetch to go through grantry, so it is

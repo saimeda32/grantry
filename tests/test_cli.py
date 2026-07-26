@@ -162,6 +162,79 @@ def test_login_no_populate_skips_config_but_warms_cache(tmp_path, monkeypatch, c
     assert "prod.ReadOnlyAccess" in read_keys()  # cache still warmed
 
 
+class _FakeTTY:
+    def isatty(self):
+        return True
+
+
+def test_login_at_tty_warms_in_background(tmp_path, monkeypatch, capsys):
+    import sys
+
+    import grantry.cli as climod
+
+    _login_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "stdin", _FakeTTY())  # pretend we are at a terminal
+    spawned = {}
+
+    def fake_spawn(populate):
+        spawned["populate"] = populate
+        return True
+
+    monkeypatch.setattr(climod, "_spawn_background_warm", fake_spawn)
+    rc = main(["login"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert spawned == {"populate": True}  # detached warm requested, with populate
+    assert "background" in out.lower()
+    assert not (tmp_path / "config").exists()  # nothing written synchronously
+
+
+def test_login_no_populate_at_tty_backgrounds_without_populate(tmp_path, monkeypatch, capsys):
+    import sys
+
+    import grantry.cli as climod
+
+    _login_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "stdin", _FakeTTY())
+    seen = {}
+
+    def fake_spawn(populate):
+        seen["populate"] = populate
+        return True
+
+    monkeypatch.setattr(climod, "_spawn_background_warm", fake_spawn)
+    rc = main(["login", "--no-populate"])
+    assert rc == 0
+    assert seen == {"populate": False}  # backgrounded, populate NOT requested
+    assert not (tmp_path / "config").exists()
+
+
+def test_login_wait_warms_synchronously_even_at_tty(tmp_path, monkeypatch):
+    import sys
+
+    import grantry.cli as climod
+
+    _login_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(sys, "stdin", _FakeTTY())
+
+    def no_spawn(populate):  # --wait must not background
+        raise AssertionError("should not spawn a background warm with --wait")
+
+    monkeypatch.setattr(climod, "_spawn_background_warm", no_spawn)
+    rc = main(["login", "--wait"])
+    assert rc == 0
+    assert "[profile prod.ReadOnlyAccess]" in (tmp_path / "config").read_text()
+
+
+def test_warm_cache_populates_profiles(tmp_path, monkeypatch):
+    _login_env(tmp_path, monkeypatch)
+    main(["login", "--no-populate"])  # session persisted, no profiles yet
+    assert not (tmp_path / "config").exists()
+    rc = main(["_warm-cache", "--populate"])  # the background worker's job
+    assert rc == 0
+    assert "[profile prod.ReadOnlyAccess]" in (tmp_path / "config").read_text()
+
+
 def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
     import grantry.cli as climod
 

@@ -108,6 +108,32 @@ def build_broker(start_url: str, region: str) -> Broker:
     )
 
 
+def _spawn_background_warm(populate: bool) -> bool:
+    """Warm the identity cache (and, if populate, ~/.aws/config profiles) in a
+    detached background process, so login returns immediately even on a large org.
+    Returns True if the process was launched. The child inherits this environment
+    (GRANTRY_HOME, the saved instance) and reads the just-persisted session from
+    the keychain; its output is discarded.
+    """
+    argv = [sys.executable, "-m", "grantry", "_warm-cache"]
+    if populate:
+        argv.append("--populate")
+    devnull = subprocess.DEVNULL
+    try:
+        if os.name == "posix":
+            subprocess.Popen(  # detach from the controlling TTY
+                argv, stdin=devnull, stdout=devnull, stderr=devnull, start_new_session=True
+            )
+        else:
+            # DETACHED_PROCESS: no console window, outlives the parent shell.
+            subprocess.Popen(
+                argv, stdin=devnull, stdout=devnull, stderr=devnull, creationflags=0x00000008
+            )
+        return True
+    except Exception:
+        return False
+
+
 def _ensure_session(broker: Broker) -> bool:
     """Make sure a usable session exists, logging in first when it does not.
 
@@ -250,6 +276,11 @@ def _run(argv: list[str] | None = None) -> int:
         action="store_true",
         help="do not write ~/.aws/config profiles after logging in",
     )
+    p_login.add_argument(
+        "--wait",
+        action="store_true",
+        help="load roles and profiles before returning, instead of in the background",
+    )
     sub.add_parser("logout", help="clear the saved session for the current instance")
     sub.add_parser("version", help="print the grantry version")
     sub.add_parser("instances", help="list remembered Identity Center instances")
@@ -377,6 +408,10 @@ def _run(argv: list[str] | None = None) -> int:
     # it is instant and never touches the network. Omitting help keeps it out of
     # the help listing, and metavar keeps it out of the usage line.
     sub.add_parser("_complete-identities")
+    # Internal: the background worker `grantry login` detaches to warm the identity
+    # cache (and, with --populate, write ~/.aws/config profiles) after login.
+    p_warm = sub.add_parser("_warm-cache", parents=[inst])
+    p_warm.add_argument("--populate", action="store_true")
 
     args = parser.parse_args(argv)
     configure_logging(args.verbose)
@@ -492,18 +527,22 @@ def _run(argv: list[str] | None = None) -> int:
         session = broker.login(TerminalHandler())
         print(f"Logged in to {session.start_url}.")
         skip_populate = args.no_populate or os.environ.get("GRANTRY_NO_POPULATE") == "1"
-        if skip_populate:
-            # Still warm the completion cache so TAB works right away. Best effort:
-            # a slow or failed listing must never turn a successful login into an error.
-            with contextlib.suppress(Exception):
-                broker.identities()
+        # Warming the completion cache (and, unless --no-populate, writing every
+        # ~/.aws/config profile) lists all account assignments, which is slow on a
+        # large org. At a terminal, do it in a detached background process so the
+        # prompt returns immediately; the roles and profiles land shortly after. In
+        # a non-interactive context (CI, a script), or with --wait, do it now so
+        # everything is ready when the command returns. Best effort either way.
+        background = sys.stdin.isatty() and not args.wait
+        if background and _spawn_background_warm(populate=not skip_populate):
+            what = "your roles" if skip_populate else "your roles and ~/.aws profiles"
+            print(f"Loading {what} in the background; they will be ready in a moment.")
         else:
-            # Write ~/.aws/config profiles for every account and role, so the native
-            # aws CLI, boto3, and Terraform work too, whether or not you use grantry.
-            # This reconciles safely (it never touches your hand-written profiles) and
-            # also warms the completion cache. Best effort, so it cannot fail the login.
             with contextlib.suppress(Exception):
-                _cmd_populate(broker, start, region, None, dry_run=False)
+                if skip_populate:
+                    broker.identities()
+                else:
+                    _cmd_populate(broker, start, region, None, dry_run=False)
         print("The native 'aws' CLI, boto3, and Terraform can use this session too.")
         if skip_populate:
             print("Run 'grantry populate' to write matching ~/.aws/config profiles.")
@@ -556,6 +595,17 @@ def _run(argv: list[str] | None = None) -> int:
     # than making them run 'grantry login' as a separate step.
     if args.command in _SESSION_COMMANDS and not _ensure_session(broker):
         return 1
+
+    if args.command == "_warm-cache":
+        # Internal background worker for `grantry login`. Warm the cache and, with
+        # --populate, write profiles. Silent and best effort: it is detached, so a
+        # failure has nowhere useful to report and must never surface.
+        with contextlib.suppress(Exception):
+            if args.populate:
+                _cmd_populate(broker, start, region, None, dry_run=False)
+            else:
+                broker.identities()
+        return 0
 
     if args.command == "ls":
         try:
@@ -1507,8 +1557,22 @@ def _write_aws_config(desired: dict[str, str], to_prune: set[str]) -> None:
     # leaving hand-written profiles and comments untouched.
     text = strip_profiles(text, set(desired) | to_prune)
     text = append_profiles(text, [desired[name] for name in sorted(desired)])
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(text)
+    # Write atomically: a reader (the aws CLI, boto3) must never see a truncated
+    # config. This matters most since `grantry login` now populates in a detached
+    # background process while you already have your prompt back. Write to a temp
+    # file in the same directory, then os.replace (atomic on POSIX and Windows).
+    import tempfile
+
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".aws-config-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
 
 
 if __name__ == "__main__":
