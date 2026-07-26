@@ -14,10 +14,6 @@ Work that is in progress or up next.
 - Make the policy gate a real boundary. Pair grantry with an isolated sandbox
   (the companion project runclave) so an agent can only get credentials through
   grantry and cannot go around it.
-- Make login fast on large organizations by loading your roles in the background.
-- Show access changes on the graph. Render a snapshot diff so added and removed
-  access are highlighted.
-- Make the project easy to trust: a clear security policy and build provenance.
 
 ## Next
 
@@ -54,8 +50,13 @@ Where grantry is today.
   populated profiles and credential_process.
 - An interactive organization access graph: who can reach what, colored by
   privilege level, with risk counts, search, a table view, and CSV or SVG export.
-- Shell completion, an identity picker, a sandbox check, and support for macOS,
-  Linux, and Windows.
+  Snapshot diffs render on the graph, so added and removed access are highlighted.
+- Fast login on large organizations: your roles and profiles load in the
+  background so login returns as soon as you are authenticated.
+- A clear security policy with build provenance: releases publish from GitHub with
+  Trusted Publishing and a PEP 740 attestation on every file.
+- Shell completion, an identity picker, a health check (`grantry doctor`), a
+  sandbox check, and support for macOS, Linux, and Windows.
 
 ## Have an idea?
 
