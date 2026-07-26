@@ -13,6 +13,31 @@ credentials or tokens in a report.
 
 You can expect an acknowledgement within a few days.
 
+## Supported versions
+
+grantry is pre-1.0 and ships fixes on the latest release. Upgrade to the newest
+version (`pipx upgrade grantry`) before reporting; security fixes land there.
+`grantry doctor` tells you when you are behind.
+
+## Verifying a release
+
+grantry publishes to PyPI with Trusted Publishing (OIDC), so no long-lived PyPI
+token exists anywhere to be stolen. Each published file carries a PEP 740 digital
+attestation (build provenance) signed through Sigstore, tying the artifact to the
+exact GitHub Actions workflow that built it.
+
+You can see the provenance on each file's PyPI page, or fetch it directly:
+
+```
+https://pypi.org/integrity/grantry/<version>/<filename>/provenance
+```
+
+The provenance names GitHub as the publisher and the `saimeda32/grantry` release
+workflow as the builder. PyPI records and serves these attestations today;
+automatic client-side verification at install time is still rolling out, so for
+now treat the provenance as something you can inspect, not something pip enforces
+for you yet.
+
 ## What grantry does to protect you
 
 - Secrets (SSO tokens) are stored in the OS keychain, never in a plain file.
@@ -45,7 +70,7 @@ convenience, not containment.
 commands (`run`, `switch`, `console`, `credential-process`) are evaluated under
 the trusted `humans` policy, which is allow-by-default, because the CLI cannot
 tell a person apart from an agent that has a shell. So by default an agent could
-run `grantry run <account/role>` and reach anything you can, around its `agents`
+run `grantry run <account.role>` and reach anything you can, around its `agents`
 rules. To close this, set `GRANTRY_CALLER=agent` in the agent's environment:
 every grantry command then evaluates under the deny-by-default `agents` policy,
 not only the MCP tools. A malicious agent with a full shell could unset that

@@ -4,6 +4,16 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.16.1] - 2026-07-26
+
+### Added
+- A "Verifying a release" section in `SECURITY.md` and a Security section in the
+  README. grantry already publishes to PyPI with Trusted Publishing (no stored
+  token) and a PEP 740 build-provenance attestation on every file; this documents
+  how to check it (`https://pypi.org/integrity/grantry/<version>/<file>/provenance`)
+  and makes `attestations: true` explicit in the publish workflow. Also added a
+  Supported versions section and enabled private vulnerability reporting.
+
 ## [0.16.0] - 2026-07-26
 
 ### Changed

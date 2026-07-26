@@ -334,6 +334,10 @@ Everything survives reboots. To remove grantry state: `grantry logout` and
   it over stdio.
 - Every grant is recorded in `~/.grantry/audit.jsonl`, and never includes the
   credentials themselves.
+- Releases are built and published from GitHub with Trusted Publishing (no stored
+  PyPI token) and carry a PEP 740 build-provenance attestation, so every file on
+  PyPI is verifiable back to the workflow that built it. See "Verifying a release"
+  in [SECURITY.md](SECURITY.md).
 
 Read this honestly before relying on grantry as a control: the policy gate only
 covers the MCP door. An agent that also has a shell could otherwise run
