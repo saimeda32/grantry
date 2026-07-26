@@ -4,6 +4,22 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.14.0] - 2026-07-25
+
+### Added
+- `grantry doctor` — a one-command health check of your setup: version freshness
+  (vs PyPI), instance and session state, shell completion, whether a policy
+  exists, and ambient-credential (sandbox) exposure. Each line is `ok`/`warn`/
+  `fail` with a remediation, and it exits non-zero on a hard failure so it is
+  scriptable. It works before any instance is configured, so it is a good first
+  command to run.
+- Completion scripts now export `GRANTRY_COMPLETION_LOADED`, so `grantry doctor`
+  can tell "completion configured but this shell has not reloaded it" (run
+  `exec <shell>`) apart from "not installed" and "active".
+- After `grantry login`, grantry notes when a newer version is on PyPI. The check
+  is cached (at most once a day), best-effort (never fails a command), and
+  silenced by `GRANTRY_NO_UPDATE_CHECK=1`.
+
 ## [0.13.0] - 2026-07-20
 
 ### Added

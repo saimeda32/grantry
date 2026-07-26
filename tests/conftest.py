@@ -27,3 +27,10 @@ def memory_keyring():
     keyring.set_keyring(backend)
     yield backend
     keyring.set_keyring(previous)
+
+
+@pytest.fixture(autouse=True)
+def no_update_check(monkeypatch):
+    """No test should reach PyPI for a version check. Tests that exercise the
+    version logic call it directly with an injected fetch."""
+    monkeypatch.setenv("GRANTRY_NO_UPDATE_CHECK", "1")

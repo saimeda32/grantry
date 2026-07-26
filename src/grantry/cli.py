@@ -316,6 +316,9 @@ def _run(argv: list[str] | None = None) -> int:
     sub.add_parser(
         "status", parents=[inst], help="a quick overview of your session, access, and policy"
     )
+    sub.add_parser(
+        "doctor", help="health-check your setup: version, session, completion, policy, sandbox"
+    )
     p_init = sub.add_parser(
         "init", parents=[inst], help="generate a starter policy from your real access"
     )
@@ -472,6 +475,11 @@ def _run(argv: list[str] | None = None) -> int:
     if args.command == "check" and args.sandbox:
         return _cmd_sandbox_check()
 
+    # doctor works before any instance is configured, so it can be the first thing
+    # a new user runs; it reports a missing instance as a finding, not an error.
+    if args.command == "doctor":
+        return _cmd_doctor()
+
     start, region = _instance(args)
     broker = build_broker(start, region)
 
@@ -508,6 +516,15 @@ def _run(argv: list[str] | None = None) -> int:
             print("Tip: run 'grantry completion --install' to enable TAB completion.")
             with contextlib.suppress(OSError):
                 hint.touch()
+        # A newer grantry available? Checked at most once a day (cached), silenced
+        # by GRANTRY_NO_UPDATE_CHECK, and never allowed to fail the login.
+        with contextlib.suppress(Exception):
+            from grantry import __version__
+            from grantry.version_check import nudge
+
+            msg = nudge(__version__)
+            if msg:
+                print(msg, file=sys.stderr)
         return 0
 
     if args.command == "logout":
@@ -1006,11 +1023,10 @@ def _cmd_check(broker: Broker) -> int:
     return 0
 
 
-def _cmd_sandbox_check() -> int:
-    """Report ambient AWS access an agent in this environment could use to go
-    around grantry's policy gate. Exit 0 means none was found (the gate is a real
-    boundary here); exit 211 means some was found. Meant to be run inside the
-    agent's sandbox, so it needs no session or configured instance.
+def _sandbox_findings() -> list[str]:
+    """Every ambient AWS access path in this environment an agent could use to go
+    around grantry's policy gate. Empty list means the gate is a real boundary
+    here. Shared by 'grantry check --sandbox' and 'grantry doctor'.
     """
     import pathlib
 
@@ -1060,6 +1076,16 @@ def _cmd_sandbox_check() -> int:
             "GRANTRY_CALLER=agent so it is gated by your agents policy."
         )
 
+    return findings
+
+
+def _cmd_sandbox_check() -> int:
+    """Report ambient AWS access an agent in this environment could use to go
+    around grantry's policy gate. Exit 0 means none was found (the gate is a real
+    boundary here); exit 211 means some was found. Meant to be run inside the
+    agent's sandbox, so it needs no session or configured instance.
+    """
+    findings = _sandbox_findings()
     if not findings:
         print("Sandbox check passed: no ambient AWS access detected.")
         print("grantry's MCP tools (or a credential_process profile with --caller agent) are the")
@@ -1074,6 +1100,91 @@ def _cmd_sandbox_check() -> int:
     print("credential env vars, no static credentials file, and no native profiles. Give it only")
     print("grantry's MCP server, or a credential_process profile with --caller agent.")
     return 211
+
+
+def _doctor_completion_state() -> tuple[str | None, bool, bool]:
+    """(shell, rc_has_line, loaded) for the completion check. shell is None when
+    it cannot be detected; loaded reflects whether this shell sourced completion."""
+    import pathlib
+
+    shell = os.path.basename(os.environ.get("SHELL", "")) or None
+    if shell not in SHELLS:
+        shell = None
+    rc_has_line = False
+    if shell is not None:
+        rc = pathlib.Path(_COMPLETION_RC[shell]).expanduser()
+        try:
+            rc_has_line = rc.is_file() and _COMPLETION_SOURCE[shell] in rc.read_text(
+                encoding="utf-8"
+            )
+        except OSError:
+            rc_has_line = False
+    loaded = bool(os.environ.get("GRANTRY_COMPLETION_LOADED"))
+    return shell, rc_has_line, loaded
+
+
+def _cmd_doctor() -> int:
+    """One-shot health check: version freshness, instance/session, shell
+    completion, policy, and ambient-credential (sandbox) exposure. Works with no
+    configured instance, so it can be the first thing a new user runs."""
+    import time
+
+    from grantry import __version__
+    from grantry.doctor import Check, completion_check, exit_code, render, version_check
+    from grantry.instance import load_instance
+    from grantry.version_check import fetch_latest
+
+    checks: list[Check] = [version_check(__version__, fetch_latest())]
+
+    inst = load_instance()
+    if inst is None:
+        checks.append(
+            Check(
+                "fail",
+                "instance",
+                "not configured. Run: grantry login --start-url <url> --region <region>",
+            )
+        )
+        checks.append(Check("warn", "session", "no instance configured, so not logged in"))
+    else:
+        checks.append(Check("ok", "instance", f"{inst.start_url} ({inst.region})"))
+        session = None
+        with contextlib.suppress(Exception):
+            session = build_broker(inst.start_url, inst.region).cached_session()
+        if session is None:
+            checks.append(Check("fail", "session", "logged out. Run: grantry login"))
+        else:
+            remaining = session.expires_at - time.time()
+            if remaining <= 0:
+                checks.append(
+                    Check("warn", "session", "expired. Run: grantry login --force-refresh")
+                )
+            else:
+                checks.append(
+                    Check("ok", "session", f"active, expires in {_human_duration(remaining)}")
+                )
+
+    checks.append(completion_check(*_doctor_completion_state()))
+
+    policy = state_path("policy.yaml")
+    if policy.exists():
+        checks.append(Check("ok", "policy", str(policy)))
+    else:
+        checks.append(
+            Check("warn", "policy", "none yet, so agents are denied by default. Run: grantry init")
+        )
+
+    findings = _sandbox_findings()
+    if findings:
+        detail = f"{len(findings)} ambient AWS path(s); run 'grantry check --sandbox'"
+        checks.append(Check("warn", "sandbox", detail))
+    else:
+        checks.append(
+            Check("ok", "sandbox", "no ambient AWS access; the policy gate is a real boundary")
+        )
+
+    print(render(checks))
+    return exit_code(checks)
 
 
 _COMPLETION_SOURCE = {

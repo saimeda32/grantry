@@ -13,7 +13,8 @@ SHELLS = ("bash", "zsh", "fish")
 # Kept in sync with the subcommands registered in cli.py.
 _SUBS = (
     "login logout version instances use ls audit mcp graph run switch "
-    "credential-process console populate check status init admin install uninstall completion"
+    "credential-process console populate check status doctor init admin install "
+    "uninstall completion"
 )
 
 _BASH = """\
@@ -46,6 +47,8 @@ _grantry_complete() {{
     esac
 }}
 complete -F _grantry_complete grantry
+# Lets 'grantry doctor' tell "configured but not reloaded" from "active".
+export GRANTRY_COMPLETION_LOADED={version}
 """
 
 _ZSH = """\
@@ -73,6 +76,8 @@ _grantry_complete() {{
     esac
 }}
 compdef _grantry_complete grantry
+# Lets 'grantry doctor' tell "configured but not reloaded" from "active".
+export GRANTRY_COMPLETION_LOADED={version}
 """
 
 _FISH = (
@@ -87,11 +92,15 @@ _FISH = (
     'complete -c grantry -l identity -a "(__grantry_ids)"\n'
     'complete -c grantry -l profile -a "(__grantry_ids)"\n'
     'complete -c grantry -n "__fish_seen_subcommand_from completion" -a "bash zsh fish"\n'
+    # Lets 'grantry doctor' tell "configured but not reloaded" from "active".
+    "set -gx GRANTRY_COMPLETION_LOADED {version}\n"
 )
 
 _TEMPLATES = {"bash": _BASH, "zsh": _ZSH, "fish": _FISH}
 
 
 def completion_script(shell: str) -> str:
+    from grantry import __version__
+
     template = _TEMPLATES[shell]
-    return template.format(subs=_SUBS)
+    return template.format(subs=_SUBS, version=__version__)

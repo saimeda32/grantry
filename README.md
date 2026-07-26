@@ -162,6 +162,7 @@ already remembered always wins.
 | `grantry populate` | Write `~/.aws/config` profiles for your access. Adds, updates, and prunes only its own profiles. |
 | `grantry check` | Diagnose your session and access, with clear exit codes. Add `--sandbox` to check whether an agent here has ambient AWS access that bypasses the gate. |
 | `grantry status` | A quick overview: instance, session expiry, cached access, policy, audit count. |
+| `grantry doctor` | Health-check your setup in one shot: version freshness, session, shell completion, policy, and sandbox exposure, each with a fix. Exits non-zero on a hard failure. |
 | `grantry init` | Generate a working policy from your real access. |
 | `grantry audit` | Print the grant history, or write an HTML timeline with `--visualize`. |
 | `grantry graph` | Write an HTML map of what your agents can reach under the policy. |
