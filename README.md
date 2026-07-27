@@ -307,8 +307,9 @@ The graph is built for an access review, not just a picture:
 Use `--snapshot` to save a crawl and `--diff` to see what changed since the last
 one. Add `--visualize --diff` to render the change **on the graph**: newly added
 access is ringed green, removed access is drawn as red dashed lines between the
-nodes that remain, and a banner plus a "Removed access" list summarize what
-changed since the baseline.
+nodes that remain, and a banner plus "Added access" and "Removed access" lists
+spell out every change since the baseline (so a new grant on a node that already
+existed is never missed).
 
 ![Access graph snapshot diff](docs/access-graph-diff.png)
 

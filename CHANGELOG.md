@@ -4,6 +4,19 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.16.2] - 2026-07-26
+
+### Fixed
+- The access-graph diff now lists **every added assignment** in an "Added access"
+  card, mirroring the "Removed access" one. Before, a new grant landing on a
+  principal, permission set, and account that all already existed was counted in
+  the banner but not shown anywhere on the page (only wholly-new nodes ring
+  green). Now nothing added is missed.
+
+### Added
+- A CLI test covering `admin assignments --visualize --diff` end to end (the diff
+  overlay is rendered and the crawl is saved as the new baseline).
+
 ## [0.16.1] - 2026-07-26
 
 ### Added

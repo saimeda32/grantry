@@ -193,11 +193,13 @@
     background: var(--surface-1); border: 1px solid var(--baseline); font-size: 13px; color: var(--ink-1); }
   #diffbanner .add { color: #1baf7a; font-weight: 650; }
   #diffbanner .rem { color: #d7263d; font-weight: 650; }
-  #removedcard { display: none; margin-top: 14px; }
-  #removedcard h2 { font-size: 14px; font-weight: 650; margin: 0 0 8px; }
-  #removedcard ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 26px; }
-  #removedcard li { font-size: 12.5px; padding: 2px 0; color: var(--ink-2); break-inside: avoid; overflow-wrap: anywhere; }
-  #removedcard li b { color: var(--ink-1); font-weight: 600; }
+  .diffcard { display: none; margin-top: 14px; }
+  .diffcard h2 { font-size: 14px; font-weight: 650; margin: 0 0 8px; }
+  .diffcard ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 26px; }
+  .diffcard li { font-size: 12.5px; padding: 2px 0; color: var(--ink-2); break-inside: avoid; overflow-wrap: anywhere; }
+  .diffcard li b { color: var(--ink-1); font-weight: 600; }
+  .diffcard.added h2 { color: #1baf7a; }
+  .diffcard.removed h2 { color: #d7263d; }
 
   /* --- enhancement toolbar: filters, export, theme --- */
   .toolbar { display: flex; gap: 8px 10px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
@@ -259,7 +261,11 @@
       </table>
       <p class="count-note" id="tcount"></p>
     </div>
-    <div class="card" id="removedcard">
+    <div class="card diffcard added" id="addedcard">
+      <h2>Added access since the baseline</h2>
+      <ul id="addedlist"></ul>
+    </div>
+    <div class="card diffcard removed" id="removedcard">
       <h2>Removed access since the baseline</h2>
       <ul id="removedlist"></ul>
     </div>
@@ -929,17 +935,22 @@ if (DIFF) {
     + 'New access is ringed green; removed access is shown as red dashed lines' + ghostNote + '.';
   document.getElementById("diffsince").textContent = DIFF.since;
   banner.style.display = "block";
-  if (REMOVED.length) {
-    const list = document.getElementById("removedlist");
-    const bold = t => { const b = document.createElement("b"); b.textContent = t; return b; };
-    for (const r of REMOVED) {
+  const bold = t => { const b = document.createElement("b"); b.textContent = t; return b; };
+  const fillList = (rows, ulId, cardId, verb) => {
+    if (!rows.length) return;
+    const list = document.getElementById(ulId);
+    for (const r of rows) {
       const li = document.createElement("li");
-      li.append(bold(r[1]), document.createTextNode(" lost "), bold(r[2]),
+      li.append(bold(r[1]), document.createTextNode(` ${verb} `), bold(r[2]),
                 document.createTextNode(" on "), bold(r[4]));
       list.append(li);
     }
-    document.getElementById("removedcard").style.display = "block";
-  }
+    document.getElementById(cardId).style.display = "block";
+  };
+  // Every added assignment is listed here (the graph can only ring wholly-new
+  // nodes green, so a new grant on an existing node would otherwise be invisible).
+  fillList(DATA.filter(r => r[6] === "added"), "addedlist", "addedcard", "gained");
+  fillList(REMOVED, "removedlist", "removedcard", "lost");
 }
 
 // ---- enrichment: crawl provenance, group members, permission-set details, OU ----

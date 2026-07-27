@@ -384,6 +384,47 @@ def test_unknown_identity_error_points_to_ls(tmp_path, monkeypatch, capsys):
     assert "grantry ls" in out
 
 
+def test_admin_visualize_diff_renders_change_on_graph(tmp_path, monkeypatch, capsys):
+    import grantry.admin as admin_mod
+    from grantry.admin import Assignment
+    from grantry.cli import _cmd_admin_assignments
+    from grantry.snapshots import latest_snapshot_name, save_snapshot
+
+    b = _fake_broker(tmp_path, monkeypatch)
+
+    # Baseline snapshot, then a current crawl that adds one grant and drops another.
+    save_snapshot(
+        [
+            Assignment("GROUP", "g1", "Platform", "AWSReadOnlyAccess", "111", "acme-dev", ""),
+            Assignment("GROUP", "g2", "Legacy", "AWSAdministratorAccess", "222", "acme-old", ""),
+        ],
+        "2026-07-01T00-00-00Z",
+    )
+    current = [
+        Assignment("GROUP", "g1", "Platform", "AWSReadOnlyAccess", "111", "acme-dev", ""),
+        Assignment("GROUP", "g3", "DataTeam", "AWSPowerUserAccess", "333", "acme-new", ""),
+    ]
+    monkeypatch.setattr(
+        admin_mod, "crawl_assignments", lambda make_client, on_progress=None: current
+    )
+    monkeypatch.setattr(admin_mod, "crawl_enrichment", lambda make_client, assignments: None)
+
+    out = tmp_path / "graph.html"
+    rc = _cmd_admin_assignments(
+        b, "us-east-1", "prod.ReadOnlyAccess", "1h", visualize=True, out=str(out), diff=True
+    )
+    assert rc == 0
+    html = out.read_text()
+    assert "const DIFF = {" in html  # diff overlay injected, not the null default
+    assert '"added":1' in html and '"removed":1' in html
+    assert '"since":"2026-07-01"' in html
+    # DataTeam's new grant is tagged "added" in DATA (guards the tag, not just presence);
+    # Legacy's lost grant is carried into REMOVED.
+    assert '"DataTeam","AWSPowerUserAccess","333","acme-new","","added"' in html
+    assert "Legacy" in html
+    assert latest_snapshot_name() != "2026-07-01T00-00-00Z"  # this crawl saved as the new baseline
+
+
 def test_completion_infers_shell_from_env(monkeypatch, capsys):
     monkeypatch.setenv("SHELL", "/bin/zsh")
     rc = main(["completion"])
