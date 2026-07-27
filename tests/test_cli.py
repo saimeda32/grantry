@@ -414,7 +414,7 @@ def test_admin_visualize_diff_renders_change_on_graph(tmp_path, monkeypatch, cap
         b, "us-east-1", "prod.ReadOnlyAccess", "1h", visualize=True, out=str(out), diff=True
     )
     assert rc == 0
-    html = out.read_text()
+    html = out.read_text(encoding="utf-8")  # the graph is UTF-8 (arrows, minus sign)
     assert "const DIFF = {" in html  # diff overlay injected, not the null default
     assert '"added":1' in html and '"removed":1' in html
     assert '"since":"2026-07-01"' in html
