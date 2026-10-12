@@ -1,6 +1,6 @@
 [project]
 name = "grantry"
-version = "0.16.2"
+version = "0.16.3"
 description = "Local credential broker for humans and AI agents, AWS-first"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,7 +9,7 @@ authors = [{ name = "Sai Kiran Meda" }]
 dependencies = [
     "botocore>=1.43",
     "keyring>=25.7",
-    "mcp>=1.28",
+    "mcp>=1.28,<2",
     "pyyaml>=6.0.3",
     "tomli>=2.0; python_version < '3.11'",
 ]

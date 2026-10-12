@@ -111,7 +111,15 @@ class AwsProvider:
             code = e.response.get("Error", {}).get("Code", "")
             # A dead/rotated refresh token needs a new login; anything else
             # (network, throttle) is transient and must propagate unchanged.
-            if code in ("InvalidGrantException", "invalid_grant", "UnauthorizedClientException"):
+            # InvalidRequestException is included because SSO-OIDC returns it
+            # (not InvalidGrantException) once the client registration backing
+            # the refresh token has itself gone stale.
+            if code in (
+                "InvalidGrantException",
+                "invalid_grant",
+                "UnauthorizedClientException",
+                "InvalidRequestException",
+            ):
                 raise RefreshExpiredError("refresh token is no longer valid") from e
             raise
         return Session(

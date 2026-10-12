@@ -4,6 +4,22 @@ All notable changes to grantry are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and grantry uses
 [semantic versioning](https://semver.org/).
 
+## [0.16.3] - 2026-10-12
+
+### Fixed
+- `grantry login` (and anything else that reads a cached session) no longer
+  crashes with a raw `InvalidRequestException` traceback when a cached refresh
+  token can no longer be renewed. AWS SSO-OIDC's `CreateToken` returns
+  `InvalidRequestException`, not `InvalidGrantException`, once the client
+  registration backing the refresh token has itself gone stale; grantry now
+  treats that the same as any other dead refresh token and falls through to a
+  fresh interactive login instead of failing.
+- Pinned `mcp` to `<2`. A fresh `pip`/`pipx install grantry` was resolving
+  `mcp` 2.x, which renamed `FastMCP` to `MCPServer` and broke every grantry
+  command at import time (`ModuleNotFoundError` from `grantry.mcp_server`).
+  The dev lockfile stayed on `mcp` 1.x so this was invisible in CI; only a
+  true fresh install hit it.
+
 ## [0.16.2] - 2026-07-26
 
 ### Fixed

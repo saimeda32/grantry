@@ -8,6 +8,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class _State:
     def __init__(self):
         self.token_polls = 0
+        # When set to (status, error_type, body), the next refresh_token grant
+        # fails with this response instead of succeeding, then this is cleared.
+        self.next_refresh_error: tuple[int, str, dict[str, str]] | None = None
 
 
 def _make_handler(state: _State):
@@ -59,6 +62,11 @@ def _make_handler(state: _State):
                 )
             elif path.endswith("/token"):
                 if body.get("grantType") == "refresh_token":
+                    if state.next_refresh_error is not None:
+                        status, error_type, error_body = state.next_refresh_error
+                        state.next_refresh_error = None
+                        self._send(status, error_body, error_type=error_type)
+                        return
                     # Renewal: return a fresh access token and rotate the refresh token.
                     self._send(
                         200,

@@ -328,7 +328,7 @@ wheels = [
 
 [[package]]
 name = "grantry"
-version = "0.16.2"
+version = "0.16.3"
 source = { editable = "." }
 dependencies = [
     { name = "botocore" },
@@ -351,7 +351,7 @@ dev = [
 requires-dist = [
     { name = "botocore", specifier = ">=1.43" },
     { name = "keyring", specifier = ">=25.7" },
-    { name = "mcp", specifier = ">=1.28" },
+    { name = "mcp", specifier = ">=1.28,<2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
 ]
