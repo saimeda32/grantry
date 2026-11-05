@@ -9,7 +9,7 @@ authors = [{ name = "Sai Kiran Meda" }]
 dependencies = [
     "botocore>=1.43",
     "keyring>=25.7",
-    "mcp>=1.28,<2",
+    "mcp>=1.28,<3",
     "pyyaml>=6.0.3",
     "tomli>=2.0; python_version < '3.11'",
 ]
